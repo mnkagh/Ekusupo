@@ -1,2 +1,9 @@
-// Placeholder entry point — no implementation yet. See README.md.
-export const PACKAGE_NAME = "@ekusupo/upf";
+export type { Album } from "./album.js";
+export type { Artist } from "./artist.js";
+export type { Artwork, ArtworkImage } from "./artwork.js";
+export { UPF_FORMAT_NAME, UPF_FORMAT_VERSION } from "./document.js";
+export type { UpfDocument, UpfSource } from "./document.js";
+export type { ExternalIds } from "./external-ids.js";
+export type { Playlist, PlaylistItem, PlaylistPrivacy } from "./playlist.js";
+export type { ProviderRef, ProviderRefs } from "./provider-ref.js";
+export type { ExplicitContentState, Track } from "./track.js";

@@ -1,0 +1,9 @@
+dist
+node_modules
+pnpm-lock.yaml
+*.tsbuildinfo
+
+# Verbatim source-of-truth docs — not to be reformatted/rewritten.
+/CLAUDE.md
+/README.md
+/docs/vision.md

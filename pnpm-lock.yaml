@@ -36,7 +36,11 @@ importers:
 
   apps/web: {}
 
-  packages/connector-sdk: {}
+  packages/connector-sdk:
+    dependencies:
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../upf
 
   packages/core: {}
 

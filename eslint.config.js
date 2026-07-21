@@ -84,6 +84,26 @@ const providersNeverImportCoreDirectly = {
   },
 };
 
+// packages/upf is the leaf of the dependency graph (ADR-0004) — nothing it
+// exports may depend on connector-sdk, core, or any provider.
+const upfStaysLeaf = {
+  files: ["packages/upf/**/*.ts"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@ekusupo/core", "@ekusupo/connector-sdk", "@ekusupo/provider-*"],
+            message:
+              "packages/upf is the dependency graph's leaf — it must not depend on core, connector-sdk, or any provider.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 export default tseslint.config(
   {
     ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo", "**/coverage/**"],
@@ -94,5 +114,6 @@ export default tseslint.config(
   coreNeverImportsProvidersDirectly,
   connectorSdkStaysProviderNeutral,
   providersNeverImportCoreDirectly,
+  upfStaysLeaf,
   eslintConfigPrettier,
 );

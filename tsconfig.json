@@ -8,6 +8,7 @@
     { "path": "packages/connector-sdk" },
     { "path": "packages/upf" },
     { "path": "packages/matching" },
+    { "path": "packages/providers/spotify" },
     { "path": "packages/shared" },
     { "path": "packages/ui" },
     { "path": "services/api" },

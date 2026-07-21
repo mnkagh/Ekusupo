@@ -36,11 +36,14 @@ implementing that interface can be plugged in.
 ## What responsibilities belong to the SDK?
 
 - Defining the `MusicProvider` interface every provider package implements.
+- Defining the static metadata model (`ProviderManifest`) that describes a
+  connector without requiring an authenticated instance.
 - Defining the capability model (`ProviderCapability`, `ProviderCapabilities`)
   used to declare what a given provider supports.
 - Defining the authentication envelope (`AuthMethod`, `AuthInput`,
   `AuthSession`) — the _shape_ auth data travels in, not how auth is
   performed.
+- Defining the account-identity envelope (`ProviderProfile`).
 - Defining the pagination envelope (`PageRequest`, `Page<T>`).
 - Defining the standardized error model (`ConnectorErrorCode`,
   `ConnectorError`).
@@ -71,9 +74,10 @@ implementing that interface can be plugged in.
 ## How should new providers integrate?
 
 1. Create `packages/providers/<name>` (ADR-0002).
-2. Implement `MusicProvider`, including a truthful `getCapabilities()` —
-   only declare a `ProviderCapability` if the corresponding method is
-   actually implemented.
+2. Export a standalone `ProviderManifest` value and implement `MusicProvider`,
+   including a truthful `getCapabilities()` — only declare a
+   `ProviderCapability` if the corresponding method is actually implemented,
+   and never exceed what the manifest's `supportedCapabilities` advertises.
 3. Inside each implemented method, call the provider's real API, then
    normalize the response into UPF types (`@ekusupo/upf`) before returning
    — see "How are provider models converted to and from UPF?" below.
@@ -107,6 +111,56 @@ The SDK defines an envelope, not a flow:
 Sessions are passed as an explicit parameter to every call
 (`getPlaylist(session, id)`), not stored on the provider instance — see
 ADR-0004 for why.
+
+## How is a provider described before it's even instantiated?
+
+Via `ProviderManifest` — static metadata, readable without constructing a
+`MusicProvider` or authenticating anything:
+
+```ts
+interface ProviderManifest {
+  name: string; // stable slug, e.g. "spotify" — a runtime value, never a type
+  displayName: string;
+  version: string; // the provider package's own version
+  authenticationMethods: AuthMethod[];
+  supportedCapabilities: ReadonlySet<ProviderCapability>;
+  website?: string;
+  documentation?: string;
+  icon?: string;
+}
+```
+
+`MusicProvider.manifest: ProviderManifest` gives an instance access to its
+own metadata, but the more important pattern is that **each provider
+package also exports its manifest as a standalone value** (e.g.
+`spotifyManifest`), importable without building a provider instance at all.
+That's what makes a provider-selection UI, a capability matrix, or a future
+plugin marketplace (CLAUDE.md §2.3) cheap: listing 10 available connectors
+never requires instantiating or authenticating 10 connectors.
+
+`manifest.supportedCapabilities` and `getCapabilities()` (below) can look
+redundant — they're not. The manifest field is the **static ceiling**: what
+this integration is built to support, in principle. `getCapabilities()`
+remains the **authoritative, runtime** source of truth a caller checks
+before acting, and may be equal to or a subset of the manifest (e.g. an
+OAuth grant with narrower scopes than the integration supports) — by
+convention it should never exceed it.
+
+## Who is authenticated? (`getProfile`)
+
+```ts
+interface ProviderProfile {
+  id: string;
+  displayName?: string;
+  email?: string;
+}
+```
+
+`MusicProvider.getProfile?(session: AuthSession): Promise<ProviderProfile>`
+— optional and capability-gated (`"profile.read"`) like everything else.
+This is deliberately **not** a UPF concept: UPF's scope is playlists,
+tracks, albums, and artists, not account identity, so `ProviderProfile`
+lives in the SDK alongside `AuthSession`, not in `packages/upf`.
 
 ## How are capabilities exposed?
 

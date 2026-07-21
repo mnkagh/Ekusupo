@@ -10,8 +10,13 @@ import type { MusicProvider } from "./index.js";
  * operations they don't support.
  */
 const fakeProvider: MusicProvider = {
-  id: "fake-provider",
-  displayName: "Fake Provider",
+  manifest: {
+    name: "fake-provider",
+    displayName: "Fake Provider",
+    version: "0.0.0",
+    authenticationMethods: ["apiKey"],
+    supportedCapabilities: new Set(["playlists.read"]),
+  },
 
   getCapabilities: () => ({
     supports: new Set(["playlists.read"]),
@@ -30,6 +35,12 @@ describe("MusicProvider", () => {
     expect(fakeProvider.listPlaylists).toBeTypeOf("function");
     expect(fakeProvider.createPlaylist).toBeUndefined();
     expect(fakeProvider.searchTracks).toBeUndefined();
+    expect(fakeProvider.getProfile).toBeUndefined();
+  });
+
+  it("exposes its manifest as static, instance-level metadata", () => {
+    expect(fakeProvider.manifest.name).toBe("fake-provider");
+    expect(fakeProvider.manifest.supportedCapabilities.has("playlists.read")).toBe(true);
   });
 
   it("round-trips getCapabilities()", () => {

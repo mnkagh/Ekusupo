@@ -2,8 +2,10 @@ import type { Album, Artist, Playlist, Track } from "@ekusupo/upf";
 
 import type { AuthInput, AuthSession } from "./auth.js";
 import type { ProviderCapabilities } from "./capability.js";
+import type { ProviderManifest } from "./manifest.js";
 import type { Page, PageRequest } from "./pagination.js";
 import type { CreatePlaylistInput, UpdatePlaylistInput } from "./playlist-input.js";
+import type { ProviderProfile } from "./profile.js";
 import type { SearchQuery } from "./search.js";
 
 /**
@@ -17,15 +19,15 @@ import type { SearchQuery } from "./search.js";
  * See docs/connector-sdk.md and ADR-0004.
  */
 export interface MusicProvider {
-  /** Stable slug, e.g. "spotify" — a runtime value, never a type. */
-  readonly id: string;
-  readonly displayName: string;
+  readonly manifest: ProviderManifest;
 
   getCapabilities(): ProviderCapabilities;
 
   authenticate(input: AuthInput): Promise<AuthSession>;
   refreshAuthentication(session: AuthSession): Promise<AuthSession>;
   revokeAuthentication(session: AuthSession): Promise<void>;
+
+  getProfile?(session: AuthSession): Promise<ProviderProfile>;
 
   listPlaylists?(session: AuthSession, request?: PageRequest): Promise<Page<Playlist>>;
   getPlaylist?(session: AuthSession, playlistId: string): Promise<Playlist>;

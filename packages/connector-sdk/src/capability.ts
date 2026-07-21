@@ -4,6 +4,7 @@
  * before invoking the corresponding optional `MusicProvider` method.
  */
 export type ProviderCapability =
+  | "profile.read"
   | "playlists.read"
   | "playlists.create"
   | "playlists.update"

@@ -41,8 +41,10 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   the page and injects Ekusupo's UI (button, panel). Contains no business
   logic — it messages the background worker and renders what it's told.
 - `shared/` — types/contracts shared by the other three: the messaging
-  bus (below) and the message catalog. Contains no `chrome.*`-specific
-  behavior beyond wrapping `chrome.runtime`/`chrome.tabs` message-passing.
+  bus, the message catalog, and the provider-agnostic detection registry
+  (below). Contains no `chrome.*`-specific behavior beyond wrapping
+  `chrome.runtime`/`chrome.tabs` message-passing, and no provider-specific
+  code — see "Resource detection."
 
 ## What's delivered so far
 
@@ -53,11 +55,14 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   "Messaging layer" below) and the `sendToBackground`/`sendToTab`/
   `onMessage` bus. No handler actually does anything yet — PR3 is the
   first to implement one for real.
+- **PR3 — Resource detection**: a provider-independent detector registry,
+  a Spotify detector (playlist/album/track), and SPA-navigation-aware
+  wiring in `content-script.ts` — see "Resource detection" below. Still
+  no messaging-bus integration; the content script only logs what it
+  detects.
 
 ## What's deferred to later PRs
 
-- **PR3 — Spotify detection**: recognizing playlist/track/album URLs and
-  extracting `{ provider, resourceType, resourceId }`.
 - **PR4 — UI injection**: an actual Ekusupo action button/panel on the
   page (Transfer / Preview / Copy UPF), still non-functional.
 - **PR5 — Transfer integration**: wiring the background worker to
@@ -134,6 +139,45 @@ message boundary regardless (it isn't structured-cloneable), so background
 holds those and only ever sends small summaries (`TransferStatus`,
 `TransferReportSummary`) shaped like, but independent of, `@ekusupo/core`'s
 `TransferJobStatus`/`TransferReport`. See ADR-0008.
+
+## Resource detection
+
+`apps/extension/src/shared/detector-registry.ts` defines the
+provider-agnostic pipeline:
+
+```ts
+interface ResourceDetector {
+  readonly provider: string;
+  detect(url: string): DetectedResource | null;
+}
+
+class DetectorRegistry {
+  register(detector: ResourceDetector): void;
+  detect(url: string): DetectedResource | null; // first match wins
+}
+```
+
+Detectors are pure functions of a URL string — no `window`, no `chrome.*`
+— which is what makes them (and the registry) testable with plain string
+fixtures. Concrete detectors are **not** in `shared/`: the Spotify one
+lives at `apps/extension/src/content/detectors/spotify.ts`, the same
+relationship `packages/providers/spotify` has to `packages/connector-sdk`
+(ADR-0009). Adding Apple Music or YouTube Music detection later is one new
+file in `content/detectors/` plus one `registry.register(...)` call — the
+registry itself never changes.
+
+`content/spa-navigation-watcher.ts` is the DOM-facing piece: it patches
+`history.pushState`/`replaceState` and listens for `popstate`, since
+Spotify's router navigates via `pushState` without a full page load or a
+native event the content script could otherwise observe. It exposes
+`watchLocationChanges(onChange): () => void` — the returned function
+un-patches `history` and removes the listener, establishing the cleanup
+convention PR4's injected UI will reuse.
+
+`content-script.ts` wires these together: builds a `DetectorRegistry`,
+registers `spotifyDetector`, runs detection on load and on every
+navigation change, and (for now) just logs the result. It does not yet
+send anything over the messaging bus — see PR4 in "What's deferred."
 
 ## Context boundaries
 

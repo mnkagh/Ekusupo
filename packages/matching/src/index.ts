@@ -1,2 +1,2 @@
-// Placeholder entry point — no implementation yet. See README.md.
-export const PACKAGE_NAME = "@ekusupo/matching";
+export { matchTrack } from "./match.js";
+export type { MatchDecision, MatchMethod, MatchOutcome, MatchRisk } from "./types.js";

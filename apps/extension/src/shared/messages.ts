@@ -60,6 +60,14 @@ export interface MessageMap {
     payload: { resource: DetectedResource };
     response: { acknowledged: true };
   };
+  PreviewRequested: {
+    payload: { resource: DetectedResource };
+    response: { acknowledged: true };
+  };
+  CopyUpfRequested: {
+    payload: { resource: DetectedResource };
+    response: { acknowledged: true };
+  };
 
   // Background -> Popup (push-style; see docs/browser-extension.md)
   TransferProgress: { payload: TransferProgressPayload; response: { acknowledged: true } };

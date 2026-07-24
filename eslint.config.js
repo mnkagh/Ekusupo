@@ -1,5 +1,7 @@
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 // Package dependency boundaries — see docs/decisions/0002-provider-package-boundaries.md
@@ -104,9 +106,28 @@ const upfStaysLeaf = {
   },
 };
 
+// apps/extension is the first React code in the repo — see docs/browser-extension.md and ADR-0007.
+const browserExtensionReactRules = {
+  files: ["apps/extension/**/*.{ts,tsx}"],
+  plugins: {
+    "react-hooks": reactHooks,
+    "react-refresh": reactRefresh,
+  },
+  rules: {
+    ...reactHooks.configs["recommended-latest"].rules,
+    ...reactRefresh.configs.vite.rules,
+  },
+};
+
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo", "**/coverage/**"],
+    ignores: [
+      "**/dist/**",
+      "**/out/**",
+      "**/node_modules/**",
+      "**/*.tsbuildinfo",
+      "**/coverage/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -115,5 +136,6 @@ export default tseslint.config(
   connectorSdkStaysProviderNeutral,
   providersNeverImportCoreDirectly,
   upfStaysLeaf,
+  browserExtensionReactRules,
   eslintConfigPrettier,
 );

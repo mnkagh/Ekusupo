@@ -119,6 +119,64 @@ const browserExtensionReactRules = {
   },
 };
 
+// Extension context boundaries — see docs/browser-extension.md "Context
+// boundaries" and ADR-0008. background/ is deliberately unrestricted: it's
+// the only context allowed to import @ekusupo/core, @ekusupo/connector-sdk,
+// and @ekusupo/provider-* (starting PR5).
+const extensionContentStaysThin = {
+  files: ["apps/extension/src/content/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@ekusupo/*"],
+            message:
+              "content/ must not depend on any @ekusupo/* package directly — message background instead.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const extensionPopupStaysThin = {
+  files: ["apps/extension/src/popup/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@ekusupo/*"],
+            message:
+              "popup/ must not depend on any @ekusupo/* package directly — message background instead.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const extensionSharedStaysLeaf = {
+  files: ["apps/extension/src/shared/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@ekusupo/*", "../popup/*", "../background/*", "../content/*"],
+            message:
+              "shared/ must stay a leaf — it must not depend on @ekusupo/* packages or reach into a sibling extension context.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -137,5 +195,8 @@ export default tseslint.config(
   providersNeverImportCoreDirectly,
   upfStaysLeaf,
   browserExtensionReactRules,
+  extensionContentStaysThin,
+  extensionPopupStaysThin,
+  extensionSharedStaysLeaf,
   eslintConfigPrettier,
 );

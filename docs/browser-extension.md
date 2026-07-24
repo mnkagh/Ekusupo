@@ -21,11 +21,13 @@ reimplement them (CLAUDE.md §3.3, §7.3).
 ```text
 Content Script  <-- runs on the provider's page, detects + injects UI
       |
+      v  (sendToBackground)
 Background Service Worker  <-- owns provider auth/session state, calls
-      |                          the Transfer Engine
-Popup / Options  <-- user-facing surfaces
+      ^                          the Transfer Engine
+      |  (sendToTab)
+Popup / Options  <-- user-facing surfaces, talk to background only
       |
-shared/  <-- typed messaging contract between the three above (PR2)
+shared/  <-- typed messaging contract between the three above
 ```
 
 Four runtime surfaces, mirroring `apps/extension/src/`:
@@ -38,22 +40,22 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
 - `content/` — injected into supported provider pages; detects what's on
   the page and injects Ekusupo's UI (button, panel). Contains no business
   logic — it messages the background worker and renders what it's told.
-- `shared/` — types/contracts shared by the other three. Empty in this PR;
-  PR2 adds the typed messaging protocol here.
+- `shared/` — types/contracts shared by the other three: the messaging
+  bus (below) and the message catalog. Contains no `chrome.*`-specific
+  behavior beyond wrapping `chrome.runtime`/`chrome.tabs` message-passing.
 
-## What this PR (PR1) delivers
+## What's delivered so far
 
-Just the foundation: the extension installs, the popup renders, the
-background service worker runs, and the content script injects into a
-Spotify page. No detection logic, no messaging protocol, no calls into the
-Transfer Engine yet.
+- **PR1 — Extension foundation**: the extension installs, the popup
+  renders, the background service worker runs, and the content script
+  injects into a Spotify page.
+- **PR2 — Typed messaging layer**: the full message catalog (see
+  "Messaging layer" below) and the `sendToBackground`/`sendToTab`/
+  `onMessage` bus. No handler actually does anything yet — PR3 is the
+  first to implement one for real.
 
 ## What's deferred to later PRs
 
-- **PR2 — Shared messaging**: a typed message protocol between
-  popup/background/content (`DetectPage`, `GetCurrentResource`,
-  `StartTransfer`, `GetTransferStatus`), replacing today's empty
-  `shared/`.
 - **PR3 — Spotify detection**: recognizing playlist/track/album URLs and
   extracting `{ provider, resourceType, resourceId }`.
 - **PR4 — UI injection**: an actual Ekusupo action button/panel on the
@@ -64,6 +66,111 @@ Transfer Engine yet.
   final `TransferReport` in the popup/injected UI. The UI reflects the
   Transfer Engine's own state machine — it does not invent its own
   progress model (per the user's explicit instruction for this phase).
+
+## Messaging layer
+
+`apps/extension/src/shared/messages.ts` defines one `MessageMap`
+interface — every message type's payload and response in one place:
+
+```ts
+interface MessageMap {
+  DetectCurrentPage: { payload: undefined; response: { resource: DetectedResource | null } };
+  StartTransfer: { payload: StartTransferPayload; response: { jobId: string } };
+  GetTransferStatus: { payload: { jobId: string }; response: { status: TransferStatus } };
+  AuthenticateProvider: { payload: { provider: string }; response: { connected: boolean } };
+  ReadPageMetadata: { payload: undefined; response: { resource: DetectedResource | null } };
+  InjectUI: { payload: { resource: DetectedResource }; response: { injected: boolean } };
+  HighlightPlaylist: { payload: { resourceId: string }; response: { highlighted: boolean } };
+  CurrentResource: {
+    payload: { resource: DetectedResource | null };
+    response: { acknowledged: true };
+  };
+  UserClickedTransfer: {
+    payload: { resource: DetectedResource };
+    response: { acknowledged: true };
+  };
+  TransferProgress: { payload: TransferProgressPayload; response: { acknowledged: true } };
+  TransferCompleted: {
+    payload: { jobId: string; report: TransferReportSummary };
+    response: { acknowledged: true };
+  };
+  TransferFailed: { payload: { jobId: string; reason: string }; response: { acknowledged: true } };
+}
+```
+
+Grouped by direction (who sends it, who's expected to handle it):
+
+- **Popup → Background**: `DetectCurrentPage`, `StartTransfer`,
+  `GetTransferStatus`, `AuthenticateProvider`.
+- **Background → Content**: `ReadPageMetadata`, `InjectUI`,
+  `HighlightPlaylist`.
+- **Content → Background**: `CurrentResource`, `UserClickedTransfer`.
+- **Background → Popup**: `TransferProgress`, `TransferCompleted`,
+  `TransferFailed` — push-style; background sends these unsolicited as a
+  transfer progresses, rather than in response to a popup request. (A
+  known v0.1 limitation: MV3 popups are ephemeral and only receive these
+  while actually open. Making progress durable across a closed popup is
+  deferred to PR6.)
+
+Two sender helpers, because Chrome's messaging API itself is asymmetric —
+this isn't hidden, it's modeled directly:
+
+- `sendToBackground(type, payload)` — used by popup and content, wraps
+  `chrome.runtime.sendMessage`.
+- `sendToTab(tabId, type, payload)` — used by background to reach a
+  specific tab's content script, wraps `chrome.tabs.sendMessage`.
+- `onMessage(type, handler)` — used by any context to register a typed
+  handler via `chrome.runtime.onMessage`; multiple calls register
+  independent listeners that each ignore messages not addressed to them.
+
+No custom request-ID correlation exists or is needed: `chrome.runtime.
+sendMessage`/`chrome.tabs.sendMessage` already return a `Promise` scoped
+to that specific call's response in Manifest V3.
+
+**Message payloads are always plain, structured-cloneable data — never a
+type imported from `@ekusupo/*`, not even type-only.** A live
+`MusicProvider` or `AuthSession` instance cannot cross `chrome.runtime`'s
+message boundary regardless (it isn't structured-cloneable), so background
+holds those and only ever sends small summaries (`TransferStatus`,
+`TransferReportSummary`) shaped like, but independent of, `@ekusupo/core`'s
+`TransferJobStatus`/`TransferReport`. See ADR-0008.
+
+## Context boundaries
+
+Enforced by ESLint (`eslint.config.js`), not just convention:
+
+- `content/` and `popup/` may **not** import any `@ekusupo/*` package,
+  directly or type-only. They only ever know `shared/`'s message types —
+  they ask background to do everything else.
+- `background/` **may** import `@ekusupo/core`, `@ekusupo/connector-sdk`,
+  and `@ekusupo/providers/*` (starting PR5) — it's the only context that
+  does.
+- `shared/` may not import any `@ekusupo/*` package or reach into a
+  sibling context folder (`../popup/*`, `../background/*`, `../content/*`)
+  — it stays a leaf, like `packages/upf` is for the backend graph.
+
+## Security boundaries
+
+`background/` is the extension's only privileged context: the only place
+holding a real `AuthSession`, the only place with `host_permissions`-gated
+network access, and (from PR5) the only place that ever imports a
+provider package. `content/` runs inside a page you don't control and
+`popup/` is closed as soon as the user clicks away — neither is a safe
+place to hold a token. This is the same reasoning as CLAUDE.md §12.1
+applied to the extension's own runtime: minimize where credentials can
+live, not just how they're transmitted.
+
+## Adding a future provider
+
+The extension's code never changes to add a provider. `background/` only
+ever imports `@ekusupo/core` and `@ekusupo/connector-sdk` — never a
+specific `@ekusupo/providers/<name>` package by name in extension code
+(the concrete provider gets selected by the caller of `runTransfer`, the
+same provider-agnosticism guarantee `packages/core` already gives the
+backend, CLAUDE.md §3.1). Adding Apple Music or YouTube Music support to
+the extension is purely a backend change (a new provider package) plus,
+eventually, a UI change to list it as a destination option — not an
+extension architecture change.
 
 ## Build tooling
 
@@ -105,10 +212,15 @@ proactively.
 The shared root `vitest.config.ts` stays on `environment: "node"` for
 every other package. `apps/extension`'s React component tests opt into
 `jsdom` per file via a `// @vitest-environment jsdom` pragma comment,
-rather than changing the global default. `background`/`content` are
-side-effect stubs with no logic in this PR — nothing meaningful to unit
-test yet; their PR1 deliverable is verified by manually loading the built
-extension (see `apps/extension/README.md`).
+rather than changing the global default. `shared/message-bus.test.ts`
+doesn't need `jsdom` at all — it stubs a minimal fake `globalThis.chrome`
+directly (the same hand-rolled-fake style used for `MusicProvider` and
+`fetch` elsewhere in this repo, rather than a `chrome`-mocking test
+dependency) and stays on the default `node` environment.
+`background`/`content` are still side-effect stubs with no logic through
+PR2 — nothing meaningful to unit test yet; their PR1 deliverable is
+verified by manually loading the built extension (see
+`apps/extension/README.md`).
 
 ## Deferred / Open Questions
 

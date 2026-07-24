@@ -60,11 +60,14 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   wiring in `content-script.ts` — see "Resource detection" below. Still
   no messaging-bus integration; the content script only logs what it
   detects.
+- **PR4 — UI injection**: a floating action panel (Transfer / Preview /
+  Copy UPF) rendered into a Shadow DOM host on detected pages — see "UI
+  injection" below. Buttons send typed messages to `background/`, which
+  only acknowledges and logs them for now; no transfer/preview/export
+  logic runs yet.
 
 ## What's deferred to later PRs
 
-- **PR4 — UI injection**: an actual Ekusupo action button/panel on the
-  page (Transfer / Preview / Copy UPF), still non-functional.
 - **PR5 — Transfer integration**: wiring the background worker to
   `@ekusupo/core`'s `runTransfer`, via `@ekusupo/providers/spotify`.
 - **PR6 — Progress UI**: surfacing `runTransfer`'s `onProgress` events and
@@ -178,6 +181,47 @@ convention PR4's injected UI will reuse.
 registers `spotifyDetector`, runs detection on load and on every
 navigation change, and (for now) just logs the result. It does not yet
 send anything over the messaging bus — see PR4 in "What's deferred."
+
+## UI injection
+
+`content/injection-manager.ts` owns showing and hiding a floating action
+panel, and nothing else:
+
+```ts
+class InjectionManager {
+  show(resource: DetectedResource, callbacks: ActionPanelCallbacks): void;
+  hide(): void;
+}
+```
+
+`show()` creates a single host `<div>` appended to `document.body` with
+`attachShadow({ mode: "open" })` the first time it's called, then mounts
+(or re-renders) a React tree — `ActionPanel` — inside the shadow root.
+`hide()` unmounts and removes the host entirely. Both are idempotent:
+calling `show()` repeatedly re-renders instead of re-injecting, and
+`content-script.ts` calls `hide()` whenever detection stops matching (e.g.
+navigating back to Spotify's home page), so the panel disappears and
+reappears correctly across SPA navigation without ever duplicating.
+
+The panel is a **fixed-position overlay** (bottom-right), not injected
+into a specific spot in Spotify's own markup — there's no reliable way to
+verify Spotify's live DOM structure from this environment, and guessing a
+selector would be exactly the kind of fragile, provider-specific
+assumption this architecture avoids elsewhere. See ADR-0010.
+
+`ActionPanel` (`content/ui/ActionPanel.tsx`) is presentational only:
+`{ resource, onTransfer, onPreview, onCopyUpf }`. It has no idea what a
+`chrome.runtime` message is — `content-script.ts` supplies callbacks that
+call `sendToBackground("UserClickedTransfer" | "PreviewRequested" |
+"CopyUpfRequested", { resource })`. `background/service-worker.ts`
+currently just acknowledges and logs each — PR5 replaces the
+`UserClickedTransfer` stub with a real call into the Transfer Engine;
+Preview/Copy UPF stay logging-only until they're scoped to a PR.
+
+Style isolation is bidirectional: Shadow DOM already stops the host
+page's CSS from reaching in, and `:host { all: initial; }` in the panel's
+own stylesheet stops it from inheriting page styles (font, color) on the
+way out.
 
 ## Context boundaries
 

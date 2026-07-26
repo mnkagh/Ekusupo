@@ -10,7 +10,7 @@ import { ConnectorError } from "@ekusupo/connector-sdk";
 import type { Playlist, Track } from "@ekusupo/upf";
 import { describe, expect, it } from "vitest";
 
-import { runTransfer } from "./run-transfer.js";
+import { runDryRunTransfer, runTransfer } from "./run-transfer.js";
 import { InMemoryTransferJobStore } from "./transfer-job-store.js";
 
 const sourceSession: AuthSession = { method: "none", raw: {} };
@@ -102,6 +102,28 @@ function makeDestination(options: FakeDestinationOptions): FakeDestination {
       : undefined,
     createdPlaylists,
     addedTracks,
+  };
+}
+
+/**
+ * Mirrors the real Spotify provider's declared capabilities exactly
+ * (`profile.read`, `playlists.read` only — no search or write methods at
+ * all). Used to prove dry run works against the one real provider that
+ * exists today. See ADR-0011.
+ */
+function makeReadOnlyDestination(): MusicProvider {
+  return {
+    manifest: {
+      name: "read-only-destination",
+      displayName: "Read-only Destination",
+      version: "0.0.0",
+      authenticationMethods: ["none"],
+      supportedCapabilities: new Set(["profile.read", "playlists.read"]),
+    },
+    getCapabilities: () => ({ supports: new Set(["profile.read", "playlists.read"]) }),
+    authenticate: async () => ({ method: "none", raw: {} }),
+    refreshAuthentication: async (session) => session,
+    revokeAuthentication: async () => {},
   };
 }
 
@@ -271,5 +293,85 @@ describe("runTransfer", () => {
     expect(report.totalItems).toBe(3);
     expect(report.matchedItems).toBe(0);
     expect(report.skippedItems).toBe(1);
+  });
+
+  describe("dry run execution mode (ADR-0011)", () => {
+    it("completes against a read-only destination with no search capability at all", async () => {
+      const songA = track({ id: "s1", title: "Song A", externalIds: { isrc: "ISRC-A" } });
+      const songB = track({ id: "s2", title: "Song B", externalIds: { isrc: "ISRC-B" } });
+      const source = makeSource(playlist([songA, songB]));
+      const destination = makeReadOnlyDestination();
+
+      const { job, report } = await runTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+        options: { dryRun: true },
+      });
+
+      expect(job.status).toBe("partial");
+      expect(job.dryRun).toBe(true);
+      expect(report.totalItems).toBe(2);
+      expect(report.matchedItems).toBe(0);
+      expect(report.skippedItems).toBe(2);
+      expect(report.unavailableItems).toHaveLength(2);
+      expect(report.providerLimitationsEncountered).toEqual([
+        "Destination provider cannot search tracks — dry run produced a plan without destination matches.",
+      ]);
+    });
+
+    it("never calls destination write methods, even when the destination has them", async () => {
+      const songA = track({ id: "s1", title: "Song A", externalIds: { isrc: "ISRC-A" } });
+      const source = makeSource(playlist([songA]));
+      const destination = makeDestination({
+        search: async () => ({
+          items: [track({ id: "d1", title: "Song A", externalIds: { isrc: "ISRC-A" } })],
+        }),
+      });
+
+      const { report } = await runDryRunTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(report.matchedItems).toBe(1);
+      expect(destination.createdPlaylists).toHaveLength(0);
+      expect(destination.addedTracks).toHaveLength(0);
+    });
+
+    it("still fails when the source itself can't be read, same as a live transfer", async () => {
+      const unreadableSource: MusicProvider = {
+        manifest: {
+          name: "unreadable-source",
+          displayName: "Unreadable Source",
+          version: "0.0.0",
+          authenticationMethods: ["none"],
+          supportedCapabilities: new Set([]),
+        },
+        getCapabilities: () => ({ supports: new Set([]) }),
+        authenticate: async () => ({ method: "none", raw: {} }),
+        refreshAuthentication: async (session) => session,
+        revokeAuthentication: async () => {},
+      };
+      const destination = makeReadOnlyDestination();
+
+      const { job, report } = await runDryRunTransfer({
+        source: unreadableSource,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(job.status).toBe("failed");
+      expect(report.providerLimitationsEncountered).toEqual([
+        "Source provider cannot read playlists.",
+      ]);
+    });
   });
 });

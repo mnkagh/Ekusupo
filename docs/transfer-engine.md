@@ -4,6 +4,11 @@ This document is architecture and contracts only. For implementation-level
 type definitions, read `packages/core/src` directly — it's the
 authoritative implementation of what's described here.
 
+As of ADR-0011, the engine has two explicit execution modes — **Dry Run**
+and **Live Transfer** — described separately below rather than as one flow
+with a `dryRun` branch. `runTransfer` is still the stable entry point;
+`options.dryRun` picks which mode runs underneath it.
+
 ## What is the Transfer Engine?
 
 The Transfer Engine orchestrates moving one playlist from a source
@@ -22,24 +27,67 @@ and gets the same guarantees: capability checks before any write, partial
 success instead of all-or-nothing failure, and a report explaining what
 happened.
 
-## Transfer flow
+## Execution modes
 
-Per CLAUDE.md §9.2, mapped onto what `runTransfer` actually does:
+`ExecutionMode` is `"dryRun" | "live"` (`packages/core/src/execution-mode.ts`).
+`runTransfer(params)` picks a mode from `params.options?.dryRun` and
+dispatches to one of two functions, both also exported directly for
+callers that want to be explicit about which mode they're invoking:
+
+```text
+runTransfer(params)
+        |
+options.dryRun ?
+   |                    |
+   v                    v
+runDryRunTransfer   runLiveTransfer
+```
+
+### Dry Run (`runDryRunTransfer`)
 
 ```text
 Validate request
         |
-Check source capabilities (playlists.read)
-        |
-Check destination capabilities (playlists.create / playlists.addTracks)
+Check source capabilities (playlists.read) — only requirement
         |
 Read source playlist (source.getPlaylist)
         |
 For each track:
+  if destination can search (tracks.search): search + matchTrack, record outcome
+  else: record as unavailable (one report note, not per-track spam)
+  never write, never require destination write or search capabilities
+        |
+Assemble TransferReport
+        |
+Persist job status (TransferJobStore)
+```
+
+Dry run **never requires destination write or search capabilities** and
+**never mutates any provider** — that's the whole point of ADR-0011: it
+exists to validate the plan, normalize to UPF, and (when the destination
+can search) run real deterministic matching, not to prove the destination
+is writable. If the destination can't search at all (Spotify today, since
+it's read-only — see ADR-0005 and the Spotify provider's own README), the
+job still completes; it just can't produce real match candidates, and the
+report says so once.
+
+### Live Transfer (`runLiveTransfer`)
+
+```text
+Validate request
+        |
+Check destination capabilities (tracks.search, playlists.create, playlists.addTracks)
+        |
+Check source capabilities (playlists.read)
+        |
+Read source playlist (source.getPlaylist)
+        |
+Create destination playlist (destination.createPlaylist)
+        |
+For each track:
   gather destination candidates (destination.searchTracks)
   matchTrack(query, candidates)          <- packages/matching
-  if dryRun: record outcome, no write
-  else: write (destination.createPlaylist / addTracksToPlaylist)
+  write (destination.addTracksToPlaylist)
   ConnectorError with retryable=true -> retry once, respecting retryAfterMs
   otherwise -> record as failed, continue with the next track
         |
@@ -48,8 +96,13 @@ Assemble TransferReport
 Persist job status (TransferJobStore)
 ```
 
-A failure on one track never aborts the whole job — CLAUDE.md §9.3 requires
-partial success, not all-or-nothing.
+Live Transfer requires full destination write capabilities upfront — this
+is unchanged from v0.1's original (pre-ADR-0011) behavior; only Dry Run's
+requirements changed. It's also the only mode that ever calls
+`createPlaylist` or `addTracksToPlaylist`.
+
+A failure on one track never aborts either mode's job — CLAUDE.md §9.3
+requires partial success, not all-or-nothing.
 
 ## Job model
 
@@ -138,10 +191,14 @@ transfer volume exists to tune against.
 
 ## Dry-run mode
 
-`TransferOptions.dryRun` runs the full read-and-match pipeline and produces
-a real `TransferReport`, but skips every write call. This lets a client
-show "here's what would happen" (CLAUDE.md §20.2: "show what will happen
-before it happens") before the user commits to a transfer.
+`TransferOptions.dryRun: true` routes `runTransfer` to `runDryRunTransfer`
+(see "Execution modes" above). It runs the read-and-match pipeline where
+the destination supports it and produces a real `TransferReport`, but
+never calls a write method and never requires destination write or search
+capabilities — ADR-0011. This lets a client show "here's what would
+happen" (CLAUDE.md §20.2: "show what will happen before it happens")
+before the user commits to a transfer, and works even when only one
+provider exists yet (see "Scope of v0.1" below).
 
 ## Progress reporting
 
@@ -189,7 +246,10 @@ stays opinion-free about transfers.
 - A second real provider connector to transfer _between_ — v0.1's tests
   validate provider-agnostic orchestration using fake in-test providers
   (see `packages/core/src/run-transfer.test.ts`), not a live cross-provider
-  transfer.
+  transfer. As of ADR-0011 this only blocks **Live Transfer**: Dry Run
+  works today against a single real provider used as both source and
+  destination (or with no destination at all beyond capability checks),
+  since it never requires destination write capabilities.
 
 ## Deferred / Open Questions
 

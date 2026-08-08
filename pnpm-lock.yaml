@@ -119,6 +119,15 @@ importers:
         specifier: workspace:*
         version: link:../../upf
 
+  packages/providers/upf-file:
+    dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../upf
+
   packages/shared: {}
 
   packages/ui: {}
@@ -128,6 +137,24 @@ importers:
   services/api: {}
 
   services/worker: {}
+
+  tests/integration:
+    devDependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@ekusupo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ekusupo/provider-spotify':
+        specifier: workspace:*
+        version: link:../../packages/providers/spotify
+      '@ekusupo/provider-upf-file':
+        specifier: workspace:*
+        version: link:../../packages/providers/upf-file
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../packages/upf
 
 packages:
 

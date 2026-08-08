@@ -9,9 +9,11 @@
     { "path": "packages/upf" },
     { "path": "packages/matching" },
     { "path": "packages/providers/spotify" },
+    { "path": "packages/providers/upf-file" },
     { "path": "packages/shared" },
     { "path": "packages/ui" },
     { "path": "services/api" },
-    { "path": "services/worker" }
+    { "path": "services/worker" },
+    { "path": "tests/integration" }
   ]
 }

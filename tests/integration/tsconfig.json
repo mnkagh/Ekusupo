@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/connector-sdk" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/providers/spotify" },
+    { "path": "../../packages/providers/upf-file" },
+    { "path": "../../packages/upf" }
+  ]
+}

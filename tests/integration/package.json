@@ -1,0 +1,13 @@
+{
+  "name": "@ekusupo/tests-integration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@ekusupo/connector-sdk": "workspace:*",
+    "@ekusupo/core": "workspace:*",
+    "@ekusupo/provider-spotify": "workspace:*",
+    "@ekusupo/provider-upf-file": "workspace:*",
+    "@ekusupo/upf": "workspace:*"
+  }
+}

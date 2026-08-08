@@ -31,12 +31,11 @@ without duplicating business logic (CLAUDE.md §3.3, §7). **Complete.**
 - ✅ Transfer integration using Dry Run (PR5, ADR-0012)
 - ✅ Progress UI, including popup status via `chrome.storage.session`
   (PR6, ADR-0013, ADR-0015)
-- 🔶 Real `AuthenticateProvider` (OAuth) — Proposed, not started
-  (ADR-0014). Needs a PKCE redesign of `packages/providers/spotify`'s
-  auth flow (the extension is a public client) _and_ a registered
-  Spotify Developer app (external credential, still needed even with
-  PKCE). This is the actual blocker for a live, end-to-end Dry Run demo.
-  Waiting on a decision — see ADR-0014's "Question for the user."
+- ✅ Real `AuthenticateProvider` (OAuth) — a real PKCE login flow via
+  `chrome.identity.launchWebAuthFlow`, paste-your-own-Client-ID in
+  Options (PR7, ADR-0014, ADR-0019, ADR-0020). The one thing still
+  outstanding isn't code: registering an actual Spotify Developer app for
+  a Client ID is the user's own action — nothing here can do that step.
 
 ## v0.3.0-alpha — Cross-provider transfer proven
 
@@ -85,5 +84,9 @@ matching (Phase 7), Desktop app, Telegram companion.
   automatically deliver the second. ADR-0018 later closed that gap for
   the write-through case specifically; the match-based case remains its
   own separate, still-open line item for the same reason.
+- "OAuth implemented" and "OAuth usable" are similarly separate on
+  purpose. PR7 makes the extension capable of a real login the moment a
+  Client ID exists; it doesn't and can't create that Client ID itself
+  (ADR-0014) — that's an external action, not a code gap.
 - This file should be updated whenever a milestone's scope changes —
   outdated roadmaps are worse than missing ones (CLAUDE.md §18.4).

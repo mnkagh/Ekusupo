@@ -27,9 +27,24 @@ extension/UI code. Their methods simply don't exist on the object this
 factory returns — absence is the capability signal (ADR-0004).
 
 `authenticate()` expects an authorization `code` already obtained via a
-redirect UI — building that UI is out of scope here. `revokeAuthentication`
-is an intentional no-op: Spotify's Web API has no server-side token-revoke
-endpoint.
+redirect UI — building that UI is out of scope here (`apps/extension`'s
+job, ADR-0019). `revokeAuthentication` is an intentional no-op: Spotify's
+Web API has no server-side token-revoke endpoint.
+
+## Two auth flows, picked by whether `clientSecret` is configured
+
+- **`clientSecret` set** — confidential-client flow (Basic auth), for a
+  future server-side caller (`services/api`) that can safely hold one.
+  Unchanged from v0.1.
+- **`clientSecret` absent** — Authorization Code **with PKCE** (RFC
+  7636): no secret sent at all, `client_id` travels in the request body,
+  and `authenticate()`'s `AuthInput.raw` must include a `codeVerifier`.
+  This is the flow a browser extension must use — it's a public client
+  and cannot safely hold a secret (ADR-0014, ADR-0019). Generating the
+  `codeVerifier`/`code_challenge` pair and running the redirect itself is
+  the caller's job (`chrome.identity.launchWebAuthFlow` in
+  `apps/extension`); this package only knows how to exchange the
+  resulting code, either way.
 
 ## No live network calls, anywhere
 

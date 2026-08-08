@@ -1,6 +1,10 @@
 # ADR-0014: Browser Extension OAuth Needs PKCE, Not the Current Client-Secret Flow
 
-Status: Proposed
+Status: Accepted — Option A implemented via ADR-0019 (backend PKCE
+support) and ADR-0020 (extension-side login flow), at the user's
+direction. The "Question for the user" below about registering a Spotify
+Developer app is still open — nothing here required or obtained that
+credential.
 
 ## Context
 

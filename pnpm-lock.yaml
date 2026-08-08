@@ -80,9 +80,23 @@ importers:
         specifier: workspace:*
         version: link:../upf
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../connector-sdk
+      '@ekusupo/matching':
+        specifier: workspace:*
+        version: link:../matching
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../upf
 
-  packages/matching: {}
+  packages/matching:
+    dependencies:
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../upf
 
   packages/providers/spotify:
     dependencies:

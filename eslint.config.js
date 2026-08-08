@@ -5,7 +5,9 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 // Package dependency boundaries — see docs/decisions/0002-provider-package-boundaries.md
+// and docs/decisions/0006-transfer-and-matching-engine-architecture.md.
 // Dependency direction: packages/core -> packages/connector-sdk -> packages/providers/<name>
+//                       packages/core -> packages/matching -> packages/upf
 // packages/* must never depend on apps/* or services/*.
 
 const packagesNeverImportAppsOrServices = {
@@ -58,9 +60,9 @@ const connectorSdkStaysProviderNeutral = {
       {
         patterns: [
           {
-            group: ["@ekusupo/core", "@ekusupo/provider-*"],
+            group: ["@ekusupo/core", "@ekusupo/provider-*", "@ekusupo/matching"],
             message:
-              "packages/connector-sdk defines the contract only — it must not depend on core or on any specific provider.",
+              "packages/connector-sdk defines the contract only — it must not depend on core, matching, or on any specific provider.",
           },
         ],
       },
@@ -76,9 +78,9 @@ const providersNeverImportCoreDirectly = {
       {
         patterns: [
           {
-            group: ["@ekusupo/core"],
+            group: ["@ekusupo/core", "@ekusupo/matching"],
             message:
-              "provider packages implement @ekusupo/connector-sdk and must not depend on @ekusupo/core directly.",
+              "provider packages implement @ekusupo/connector-sdk and must not depend on @ekusupo/core or @ekusupo/matching directly.",
           },
         ],
       },
@@ -87,7 +89,7 @@ const providersNeverImportCoreDirectly = {
 };
 
 // packages/upf is the leaf of the dependency graph (ADR-0004) — nothing it
-// exports may depend on connector-sdk, core, or any provider.
+// exports may depend on connector-sdk, core, matching, or any provider.
 const upfStaysLeaf = {
   files: ["packages/upf/**/*.ts"],
   rules: {
@@ -96,9 +98,34 @@ const upfStaysLeaf = {
       {
         patterns: [
           {
+            group: [
+              "@ekusupo/core",
+              "@ekusupo/connector-sdk",
+              "@ekusupo/provider-*",
+              "@ekusupo/matching",
+            ],
+            message:
+              "packages/upf is the dependency graph's leaf — it must not depend on core, connector-sdk, matching, or any provider.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+// packages/matching depends only on packages/upf (ADR-0006) — it must never
+// depend on connector-sdk, core, or any provider.
+const matchingStaysLeafLike = {
+  files: ["packages/matching/**/*.ts"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
             group: ["@ekusupo/core", "@ekusupo/connector-sdk", "@ekusupo/provider-*"],
             message:
-              "packages/upf is the dependency graph's leaf — it must not depend on core, connector-sdk, or any provider.",
+              "packages/matching must not depend on core, connector-sdk, or any provider — it only depends on @ekusupo/upf.",
           },
         ],
       },
@@ -194,6 +221,7 @@ export default tseslint.config(
   connectorSdkStaysProviderNeutral,
   providersNeverImportCoreDirectly,
   upfStaysLeaf,
+  matchingStaysLeafLike,
   browserExtensionReactRules,
   extensionContentStaysThin,
   extensionPopupStaysThin,

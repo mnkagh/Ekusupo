@@ -4,5 +4,10 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@ekusupo/connector-sdk": "workspace:*",
+    "@ekusupo/matching": "workspace:*",
+    "@ekusupo/upf": "workspace:*"
+  }
 }

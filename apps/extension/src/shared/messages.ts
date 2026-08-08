@@ -50,7 +50,7 @@ export type TransferPanelState =
   | { kind: "failed"; reason: string };
 
 export interface MessageMap {
-  // Popup -> Background
+  // Popup / Options -> Background
   DetectCurrentPage: { payload: undefined; response: { resource: DetectedResource | null } };
   StartTransfer: { payload: StartTransferPayload; response: { jobId: string } };
   /**
@@ -59,7 +59,21 @@ export interface MessageMap {
    * which job is running there. See ADR-0015.
    */
   GetTabTransferState: { payload: { tabId: number }; response: { state: TransferPanelState } };
-  AuthenticateProvider: { payload: { provider: string }; response: { connected: boolean } };
+  /**
+   * Sent from `options/` once it's already run the PKCE redirect
+   * (`chrome.identity.launchWebAuthFlow`) and has an authorization code
+   * in hand — background only does the token exchange. See ADR-0020.
+   */
+  AuthenticateProvider: {
+    payload: {
+      provider: string;
+      code: string;
+      redirectUri: string;
+      codeVerifier: string;
+      clientId: string;
+    };
+    response: { connected: boolean };
+  };
 
   // Background -> Content
   ReadPageMetadata: { payload: undefined; response: { resource: DetectedResource | null } };

@@ -3,7 +3,7 @@ import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 
 import type { DetectedResource } from "../shared/messages.js";
-import type { ActionPanelCallbacks } from "./ui/ActionPanel.js";
+import type { ActionPanelCallbacks, TransferState } from "./ui/ActionPanel.js";
 import { ActionPanel } from "./ui/ActionPanel.js";
 
 const HOST_ELEMENT_ID = "ekusupo-root";
@@ -18,9 +18,11 @@ const PANEL_STYLES = `
   :host { all: initial; }
   .ekusupo-panel {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     padding: 10px 14px;
+    max-width: 320px;
     background: #121212;
     color: #ffffff;
     border-radius: 8px;
@@ -49,6 +51,22 @@ const PANEL_STYLES = `
   .ekusupo-panel__actions button:hover {
     background: #1ed760;
   }
+  .ekusupo-panel__actions button:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .ekusupo-panel__status {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 12px;
+    color: #b3b3b3;
+  }
+  .ekusupo-panel__status[data-state="failed"] {
+    color: #f15e6c;
+  }
+  .ekusupo-panel__status[data-state="completed"] {
+    color: #1db954;
+  }
 `;
 
 /**
@@ -57,9 +75,14 @@ const PANEL_STYLES = `
  * re-render instead of re-injecting, and hide() fully unmounts and
  * removes the host. See docs/browser-extension.md "UI injection".
  */
+const IDLE_STATE: TransferState = { kind: "idle" };
+
 export class InjectionManager {
   private hostElement: HTMLElement | null = null;
   private reactRoot: Root | null = null;
+  private resource: DetectedResource | null = null;
+  private callbacks: ActionPanelCallbacks | null = null;
+  private transferState: TransferState = IDLE_STATE;
 
   show(resource: DetectedResource, callbacks: ActionPanelCallbacks): void {
     if (!this.hostElement) {
@@ -84,12 +107,24 @@ export class InjectionManager {
       this.reactRoot = createRoot(mountPoint);
     }
 
-    // flushSync rather than a plain render(): a page navigation can hide
-    // this panel again immediately after, so the DOM needs to reflect
-    // this update synchronously rather than on React's own schedule.
-    flushSync(() => {
-      this.reactRoot?.render(<ActionPanel resource={resource} {...callbacks} />);
-    });
+    // A newly detected resource starts its own transfer state fresh —
+    // any in-flight status belonged to whatever was shown before.
+    this.resource = resource;
+    this.callbacks = callbacks;
+    this.transferState = IDLE_STATE;
+    this.render();
+  }
+
+  /**
+   * Applies a TransferProgress/TransferCompleted/TransferFailed message to
+   * the currently shown panel. A no-op if nothing is shown (e.g. the
+   * message arrives after the user navigated away) — see
+   * docs/browser-extension.md "Progress UI".
+   */
+  updateTransferState(state: TransferState): void {
+    if (!this.reactRoot) return;
+    this.transferState = state;
+    this.render();
   }
 
   hide(): void {
@@ -97,5 +132,22 @@ export class InjectionManager {
     this.reactRoot = null;
     this.hostElement?.remove();
     this.hostElement = null;
+    this.resource = null;
+    this.callbacks = null;
+    this.transferState = IDLE_STATE;
+  }
+
+  private render(): void {
+    const { resource, callbacks } = this;
+    if (!resource || !callbacks) return;
+
+    // flushSync rather than a plain render(): a page navigation can hide
+    // this panel again immediately after, so the DOM needs to reflect
+    // this update synchronously rather than on React's own schedule.
+    flushSync(() => {
+      this.reactRoot?.render(
+        <ActionPanel resource={resource} transferState={this.transferState} {...callbacks} />,
+      );
+    });
   }
 }

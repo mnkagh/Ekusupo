@@ -64,4 +64,39 @@ describe("InjectionManager", () => {
 
     expect(onTransfer).toHaveBeenCalledTimes(1);
   });
+
+  it("updateTransferState() re-renders the status text without a fresh show() call", () => {
+    const manager = new InjectionManager();
+    manager.show(resource, noopCallbacks());
+    manager.updateTransferState({ kind: "failed", reason: "not connected" });
+
+    const host = document.getElementById("ekusupo-root");
+    const status = host?.shadowRoot?.querySelector(".ekusupo-panel__status");
+    expect(status?.textContent).toBe("Failed: not connected");
+  });
+
+  it("updateTransferState() is a no-op once hidden", () => {
+    const manager = new InjectionManager();
+    manager.show(resource, noopCallbacks());
+    manager.hide();
+
+    expect(() =>
+      manager.updateTransferState({ kind: "failed", reason: "late message" }),
+    ).not.toThrow();
+    expect(document.querySelectorAll("#ekusupo-root")).toHaveLength(0);
+  });
+
+  it("a fresh show() resets transfer state back to idle", () => {
+    const manager = new InjectionManager();
+    manager.show(resource, noopCallbacks());
+    manager.updateTransferState({
+      kind: "completed",
+      summary: { totalItems: 1, matchedItems: 1, createdItems: 0, skippedItems: 0, failedItems: 0 },
+    });
+
+    manager.show({ ...resource, resourceId: "different" }, noopCallbacks());
+
+    const host = document.getElementById("ekusupo-root");
+    expect(host?.shadowRoot?.querySelector(".ekusupo-panel__status")).toBeNull();
+  });
 });

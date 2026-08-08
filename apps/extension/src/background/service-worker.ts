@@ -79,6 +79,31 @@ onMessage("GetTabTransferState", async ({ tabId }) => ({
   state: await getTabTransferState(tabId),
 }));
 
+/**
+ * `options/` has already run the PKCE redirect and has a `code` in hand
+ * — this only does the token exchange and holds the resulting session.
+ * See ADR-0014/ADR-0019/ADR-0020.
+ */
+onMessage(
+  "AuthenticateProvider",
+  async ({ provider, code, redirectUri, codeVerifier, clientId }) => {
+    const providerInstance = getProvider(provider, { clientId });
+    if (!providerInstance) return { connected: false };
+
+    try {
+      const session = await providerInstance.authenticate({
+        method: "oauth2",
+        raw: { code, redirectUri, codeVerifier },
+      });
+      sessions.set(provider, session);
+      return { connected: true };
+    } catch (error) {
+      console.warn("[Ekusupo] AuthenticateProvider failed", error);
+      return { connected: false };
+    }
+  },
+);
+
 onMessage("PreviewRequested", ({ resource }) => {
   console.log("[Ekusupo] PreviewRequested received", resource);
   return { acknowledged: true };

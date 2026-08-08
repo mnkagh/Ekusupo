@@ -186,6 +186,31 @@ const extensionPopupStaysThin = {
   },
 };
 
+/**
+ * options/ never had this rule stated for it before now — a gap noticed
+ * while wiring real OAuth here (ADR-0020). It talks to `chrome.identity`
+ * and `background` only, exactly like content/popup already do; it
+ * never needed a provider package import and shouldn't gain one later
+ * without a deliberate decision.
+ */
+const extensionOptionsStaysThin = {
+  files: ["apps/extension/src/options/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["@ekusupo/*"],
+            message:
+              "options/ must not depend on any @ekusupo/* package directly — message background instead.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 const extensionSharedStaysLeaf = {
   files: ["apps/extension/src/shared/**/*.{ts,tsx}"],
   rules: {
@@ -225,6 +250,7 @@ export default tseslint.config(
   browserExtensionReactRules,
   extensionContentStaysThin,
   extensionPopupStaysThin,
+  extensionOptionsStaysThin,
   extensionSharedStaysLeaf,
   eslintConfigPrettier,
 );

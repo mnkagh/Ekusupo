@@ -69,8 +69,11 @@ becomes the primary dashboard (CLAUDE.md §8).
     verified end-to-end against an actual running server (`curl`, not
     just `.inject()`). In-memory stores for now — no live Postgres exists
     in this environment to build a real one against yet.
-  - ⬜ `apps/web`'s sign-in/sign-up UI — next step, nothing calls the
-    auth API yet.
+  - ✅ Sign-in/sign-up UI (ADR-0023) — `apps/web` now has a real form
+    calling `services/api`, verified with an actual running Vite dev
+    server and a real cross-origin `curl` request carrying the browser's
+    actual dev origin (not just `.inject()`, which bypasses CORS
+    entirely).
   - ⬜ Postgres-backed `UserStore`/`SessionStore`, connected provider
     accounts, transfer setup screens, history — the rest of CLAUDE.md
     §8.2, sequenced after the UI can at least sign someone in.

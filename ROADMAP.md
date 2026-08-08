@@ -61,13 +61,19 @@ becomes the primary dashboard (CLAUDE.md §8).
   streaming) — still needs a second real **catalog** provider, blocked on
   the same external-credential problem as Spotify's own OAuth (ADR-0012,
   ADR-0014).
-- 🔶 Web Dashboard MVP (CLAUDE.md §8.2 screens) — tech stack decided
-  (ADR-0017) and scaffolding done (ADR-0021): `apps/web` (Vite + React)
-  and `services/api` (Fastify) both install, build, and run for real —
-  verified with an actual `vite build` and a live `GET /health` request,
-  not just `tsc`. No screens, no data model, no auth yet — those are
-  their own dedicated passes, same size as the browser extension's
-  PR2 onward.
+- 🔶 Web Dashboard MVP (CLAUDE.md §8.2 screens). Progress so far:
+  - ✅ Tech stack decided (ADR-0017) and scaffolding done (ADR-0021):
+    `apps/web`/`services/api` install, build, and run for real.
+  - ✅ Auth v1 (ADR-0022) — real sign-up/sign-in/sign-out/me on
+    `services/api`, session cookies, `node:crypto` password hashing,
+    verified end-to-end against an actual running server (`curl`, not
+    just `.inject()`). In-memory stores for now — no live Postgres exists
+    in this environment to build a real one against yet.
+  - ⬜ `apps/web`'s sign-in/sign-up UI — next step, nothing calls the
+    auth API yet.
+  - ⬜ Postgres-backed `UserStore`/`SessionStore`, connected provider
+    accounts, transfer setup screens, history — the rest of CLAUDE.md
+    §8.2, sequenced after the UI can at least sign someone in.
 
 ## Later (post-MVP)
 

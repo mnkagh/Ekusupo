@@ -133,9 +133,10 @@ const matchingStaysLeafLike = {
   },
 };
 
-// apps/extension is the first React code in the repo — see docs/browser-extension.md and ADR-0007.
-const browserExtensionReactRules = {
-  files: ["apps/extension/**/*.{ts,tsx}"],
+// React rules for every React app in the repo — apps/extension (ADR-0007)
+// and, since ADR-0021, apps/web.
+const reactAppRules = {
+  files: ["apps/extension/**/*.{ts,tsx}", "apps/web/**/*.{ts,tsx}"],
   plugins: {
     "react-hooks": reactHooks,
     "react-refresh": reactRefresh,
@@ -143,6 +144,36 @@ const browserExtensionReactRules = {
   rules: {
     ...reactHooks.configs["recommended-latest"].rules,
     ...reactRefresh.configs.vite.rules,
+  },
+};
+
+/**
+ * apps/web is an HTTP client of services/api, never a direct consumer of
+ * backend packages — the same client/API-layer boundary CLAUDE.md
+ * §4.3/§4.4 describes, enforced from apps/web's very first commit rather
+ * than added after the fact (apps/extension's equivalent rules only
+ * arrived in later PRs — see ADR-0021).
+ */
+const webNeverImportsBackendPackagesDirectly = {
+  files: ["apps/web/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: [
+              "@ekusupo/core",
+              "@ekusupo/connector-sdk",
+              "@ekusupo/provider-*",
+              "@ekusupo/matching",
+            ],
+            message:
+              "apps/web must not depend on backend packages directly — talk to services/api over HTTP instead.",
+          },
+        ],
+      },
+    ],
   },
 };
 
@@ -247,10 +278,11 @@ export default tseslint.config(
   providersNeverImportCoreDirectly,
   upfStaysLeaf,
   matchingStaysLeafLike,
-  browserExtensionReactRules,
+  reactAppRules,
   extensionContentStaysThin,
   extensionPopupStaysThin,
   extensionOptionsStaysThin,
   extensionSharedStaysLeaf,
+  webNeverImportsBackendPackagesDirectly,
   eslintConfigPrettier,
 );

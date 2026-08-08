@@ -4,3 +4,5 @@ packages:
   - "packages/providers/*"
   - "services/*"
   - "tests/*"
+allowBuilds:
+  esbuild: true

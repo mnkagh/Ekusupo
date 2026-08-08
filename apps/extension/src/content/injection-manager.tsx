@@ -2,8 +2,8 @@ import { flushSync } from "react-dom";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 
-import type { DetectedResource } from "../shared/messages.js";
-import type { ActionPanelCallbacks, TransferState } from "./ui/ActionPanel.js";
+import type { DetectedResource, TransferPanelState } from "../shared/messages.js";
+import type { ActionPanelCallbacks } from "./ui/ActionPanel.js";
 import { ActionPanel } from "./ui/ActionPanel.js";
 
 const HOST_ELEMENT_ID = "ekusupo-root";
@@ -75,14 +75,14 @@ const PANEL_STYLES = `
  * re-render instead of re-injecting, and hide() fully unmounts and
  * removes the host. See docs/browser-extension.md "UI injection".
  */
-const IDLE_STATE: TransferState = { kind: "idle" };
+const IDLE_STATE: TransferPanelState = { kind: "idle" };
 
 export class InjectionManager {
   private hostElement: HTMLElement | null = null;
   private reactRoot: Root | null = null;
   private resource: DetectedResource | null = null;
   private callbacks: ActionPanelCallbacks | null = null;
-  private transferState: TransferState = IDLE_STATE;
+  private transferState: TransferPanelState = IDLE_STATE;
 
   show(resource: DetectedResource, callbacks: ActionPanelCallbacks): void {
     if (!this.hostElement) {
@@ -121,7 +121,7 @@ export class InjectionManager {
    * message arrives after the user navigated away) — see
    * docs/browser-extension.md "Progress UI".
    */
-  updateTransferState(state: TransferState): void {
+  updateTransferState(state: TransferPanelState): void {
     if (!this.reactRoot) return;
     this.transferState = state;
     this.render();

@@ -1,4 +1,5 @@
-import type { DetectedResource, TransferReportSummary } from "../../shared/messages.js";
+import type { DetectedResource, TransferPanelState } from "../../shared/messages.js";
+import { describeTransferPanelState } from "../../shared/transfer-panel-state.js";
 
 export interface ActionPanelCallbacks {
   onTransfer: () => void;
@@ -6,36 +7,9 @@ export interface ActionPanelCallbacks {
   onCopyUpf: () => void;
 }
 
-/**
- * Mirrors the Transfer Engine's own state machine (PR6 doesn't invent its
- * own progress model, per the user's explicit instruction) — `step` comes
- * straight from `TransferProgressPayload`, `summary` from
- * `TransferReportSummary`. See docs/browser-extension.md "Progress UI".
- */
-export type TransferState =
-  | { kind: "idle" }
-  | { kind: "running"; step: string; processed?: number; total?: number }
-  | { kind: "completed"; summary: TransferReportSummary }
-  | { kind: "failed"; reason: string };
-
 export interface ActionPanelProps extends ActionPanelCallbacks {
   resource: DetectedResource;
-  transferState: TransferState;
-}
-
-function describeTransferState(state: TransferState): string | null {
-  switch (state.kind) {
-    case "idle":
-      return null;
-    case "running":
-      return state.processed !== undefined && state.total !== undefined
-        ? `${state.step} (${state.processed}/${state.total})`
-        : state.step;
-    case "completed":
-      return `Done — ${state.summary.matchedItems}/${state.summary.totalItems} matched, ${state.summary.skippedItems} skipped, ${state.summary.failedItems} failed`;
-    case "failed":
-      return `Failed: ${state.reason}`;
-  }
+  transferState: TransferPanelState;
 }
 
 /**
@@ -52,7 +26,7 @@ export function ActionPanel({
   onPreview,
   onCopyUpf,
 }: ActionPanelProps) {
-  const statusText = describeTransferState(transferState);
+  const statusText = describeTransferPanelState(transferState);
   const isRunning = transferState.kind === "running";
 
   return (

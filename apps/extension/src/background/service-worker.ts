@@ -2,8 +2,10 @@
 // See docs/browser-extension.md.
 import { getProvider } from "./provider-registry.js";
 import { SessionStore } from "./session-store.js";
+import { getTabTransferState, setTabTransferState } from "./tab-transfer-status-store.js";
 import { runDryRunTransferForResource, summarizeReport } from "./transfer-orchestrator.js";
 import { onMessage, sendToTab } from "../shared/message-bus.js";
+import type { TransferPanelState } from "../shared/messages.js";
 
 const sessions = new SessionStore();
 
@@ -33,6 +35,29 @@ function notifyTab(tabId: number | undefined, send: (id: number) => void): void 
   send(tabId);
 }
 
+/**
+ * Pushes a state to the tab (if any) and persists it for the popup —
+ * one call site per outcome instead of duplicating both concerns at
+ * every `onProgress`/`onCompleted`/`onFailed` call. See ADR-0015.
+ */
+function publishTransferState(
+  tabId: number | undefined,
+  jobId: string,
+  state: TransferPanelState,
+): void {
+  notifyTab(tabId, (id) => {
+    void setTabTransferState(id, state).catch(() => {});
+
+    if (state.kind === "running") {
+      void sendToTab(id, "TransferProgress", { jobId, ...state }).catch(() => {});
+    } else if (state.kind === "completed") {
+      void sendToTab(id, "TransferCompleted", { jobId, report: state.summary }).catch(() => {});
+    } else if (state.kind === "failed") {
+      void sendToTab(id, "TransferFailed", { jobId, reason: state.reason }).catch(() => {});
+    }
+  });
+}
+
 onMessage("UserClickedTransfer", async ({ resource }, sender) => {
   console.log("[Ekusupo] UserClickedTransfer received", resource);
   const tabId = sender.tab?.id;
@@ -41,24 +66,18 @@ onMessage("UserClickedTransfer", async ({ resource }, sender) => {
   await runDryRunTransferForResource(resource, {
     getProvider,
     getSession: (provider) => sessions.get(provider),
-    onProgress: (event) =>
-      notifyTab(tabId, (id) => {
-        void sendToTab(id, "TransferProgress", { jobId, ...event }).catch(() => {});
-      }),
+    onProgress: (event) => publishTransferState(tabId, jobId, { kind: "running", ...event }),
     onCompleted: (report) =>
-      notifyTab(tabId, (id) => {
-        void sendToTab(id, "TransferCompleted", { jobId, report: summarizeReport(report) }).catch(
-          () => {},
-        );
-      }),
-    onFailed: (reason) =>
-      notifyTab(tabId, (id) => {
-        void sendToTab(id, "TransferFailed", { jobId, reason }).catch(() => {});
-      }),
+      publishTransferState(tabId, jobId, { kind: "completed", summary: summarizeReport(report) }),
+    onFailed: (reason) => publishTransferState(tabId, jobId, { kind: "failed", reason }),
   });
 
   return { acknowledged: true };
 });
+
+onMessage("GetTabTransferState", async ({ tabId }) => ({
+  state: await getTabTransferState(tabId),
+}));
 
 onMessage("PreviewRequested", ({ resource }) => {
   console.log("[Ekusupo] PreviewRequested received", resource);

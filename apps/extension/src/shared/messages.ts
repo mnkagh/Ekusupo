@@ -19,10 +19,6 @@ export interface StartTransferPayload {
   destinationProvider: string;
 }
 
-/** Mirrors, but does not import, @ekusupo/core's TransferJobStatus. */
-export type TransferStatus =
-  "pending" | "running" | "paused" | "cancelled" | "completed" | "failed" | "partial";
-
 export interface TransferProgressPayload {
   jobId: string;
   step: string;
@@ -39,11 +35,30 @@ export interface TransferReportSummary {
   failedItems: number;
 }
 
+/**
+ * The shape a UI (injected panel, popup) renders from — built directly
+ * from TransferProgress/Completed/Failed payloads, not a separately
+ * invented vocabulary (see docs/browser-extension.md "Progress UI" and
+ * ADR-0013). Shared between `content/ui/ActionPanel.tsx` and
+ * `popup/Popup.tsx` so "what does a transfer's state look like" has one
+ * definition.
+ */
+export type TransferPanelState =
+  | { kind: "idle" }
+  | { kind: "running"; step: string; processed?: number; total?: number }
+  | { kind: "completed"; summary: TransferReportSummary }
+  | { kind: "failed"; reason: string };
+
 export interface MessageMap {
   // Popup -> Background
   DetectCurrentPage: { payload: undefined; response: { resource: DetectedResource | null } };
   StartTransfer: { payload: StartTransferPayload; response: { jobId: string } };
-  GetTransferStatus: { payload: { jobId: string }; response: { status: TransferStatus } };
+  /**
+   * Keyed by tabId, not jobId — the popup knows which tab it's looking at
+   * (`chrome.tabs.query({ active: true, currentWindow: true })`), not
+   * which job is running there. See ADR-0015.
+   */
+  GetTabTransferState: { payload: { tabId: number }; response: { state: TransferPanelState } };
   AuthenticateProvider: { payload: { provider: string }; response: { connected: boolean } };
 
   // Background -> Content

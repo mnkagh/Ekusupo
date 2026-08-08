@@ -61,10 +61,13 @@ becomes the primary dashboard (CLAUDE.md §8).
   streaming) — still needs a second real **catalog** provider, blocked on
   the same external-credential problem as Spotify's own OAuth (ADR-0012,
   ADR-0014).
-- ⬜ Web Dashboard MVP (CLAUDE.md §8.2 screens) — tech stack decided
-  (ADR-0017: React + Vite, Fastify, PostgreSQL, own session auth).
-  Scaffolding not started yet — a dedicated pass, same size as the
-  browser extension's PR1–6.
+- 🔶 Web Dashboard MVP (CLAUDE.md §8.2 screens) — tech stack decided
+  (ADR-0017) and scaffolding done (ADR-0021): `apps/web` (Vite + React)
+  and `services/api` (Fastify) both install, build, and run for real —
+  verified with an actual `vite build` and a live `GET /health` request,
+  not just `tsc`. No screens, no data model, no auth yet — those are
+  their own dedicated passes, same size as the browser extension's
+  PR2 onward.
 
 ## Later (post-MVP)
 

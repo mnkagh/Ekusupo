@@ -22,11 +22,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 function stubMe(result: { user: unknown } | { error: string; status: number }) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      "user" in result
+    vi.fn(async (url: string | URL | Request) => {
+      if (url.toString().includes("/providers")) return jsonResponse({ providers: [] });
+      return "user" in result
         ? jsonResponse(result)
-        : jsonResponse({ error: result.error }, result.status),
-    ),
+        : jsonResponse({ error: result.error }, result.status);
+    }),
   );
 }
 
@@ -50,7 +51,18 @@ describe("App", () => {
     });
     render(<App />);
 
-    expect(await screen.findByText("Signed in as user@example.com")).toBeDefined();
+    expect(await screen.findByText(/Signed in as user@example\.com/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeDefined();
+  });
+
+  it("shows a message after a successful provider connect redirect", async () => {
+    stubMe({
+      user: { id: "user-1", email: "user@example.com", createdAt: "2026-01-01T00:00:00.000Z" },
+    });
+    window.history.replaceState(null, "", "/?connected=spotify");
+    render(<App />);
+
+    expect(await screen.findByText("Connected spotify.")).toBeDefined();
+    window.history.replaceState(null, "", "/");
   });
 });

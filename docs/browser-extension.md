@@ -75,16 +75,20 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   on failure — see "Progress UI" below and ADR-0013. The popup also shows
   the active tab's last known status, via `chrome.storage.session` — see
   ADR-0015.
+- **PR7 — Real OAuth**: `options/` runs a real PKCE login flow via
+  `chrome.identity.launchWebAuthFlow` — paste a Spotify Client ID,
+  connect, and `UserClickedTransfer` uses a real session instead of
+  failing with "isn't connected yet." See "OAuth flow" below and
+  ADR-0019/ADR-0020.
 
 ## What's deferred to later PRs
 
-Browser Extension MVP (v0.2.0-alpha, per `ROADMAP.md`) is now feature
-complete for PR1–PR6. What's left is out of this phase's scope:
+Browser Extension MVP (v0.2.0-alpha, per `ROADMAP.md`) is feature
+complete through PR7. What's left is out of this phase's scope:
 
-- Real `AuthenticateProvider` (OAuth) — see "Transfer integration" below
-  and ADR-0012's "Deferred / Open Questions," plus ADR-0014 (Proposed,
-  pending a decision on registering a Spotify Developer app).
-- Live Transfer, a destination picker, and a second provider — v0.3.0-alpha.
+- Live Transfer, a destination picker, and a second provider — v0.3.0-alpha
+  (partially done at the platform level — see `ROADMAP.md` — not yet
+  wired into the extension's UI).
 
 ## Messaging layer
 
@@ -96,7 +100,16 @@ interface MessageMap {
   DetectCurrentPage: { payload: undefined; response: { resource: DetectedResource | null } };
   StartTransfer: { payload: StartTransferPayload; response: { jobId: string } };
   GetTabTransferState: { payload: { tabId: number }; response: { state: TransferPanelState } };
-  AuthenticateProvider: { payload: { provider: string }; response: { connected: boolean } };
+  AuthenticateProvider: {
+    payload: {
+      provider: string;
+      code: string;
+      redirectUri: string;
+      codeVerifier: string;
+      clientId: string;
+    };
+    response: { connected: boolean };
+  };
   ReadPageMetadata: { payload: undefined; response: { resource: DetectedResource | null } };
   InjectUI: { payload: { resource: DetectedResource }; response: { injected: boolean } };
   HighlightPlaylist: { payload: { resourceId: string }; response: { highlighted: boolean } };
@@ -120,7 +133,9 @@ interface MessageMap {
 Grouped by direction (who sends it, who's expected to handle it):
 
 - **Popup → Background**: `DetectCurrentPage`, `StartTransfer`,
-  `GetTabTransferState`, `AuthenticateProvider`.
+  `GetTabTransferState`.
+- **Options → Background**: `AuthenticateProvider` — sent once `options/`
+  has already run the PKCE redirect itself; see "OAuth flow" below.
 - **Background → Content**: `ReadPageMetadata`, `InjectUI`,
   `HighlightPlaylist`.
 - **Content → Background**: `CurrentResource`, `UserClickedTransfer`.
@@ -250,18 +265,16 @@ tests use, with no `chrome` faking needed.
 `service-worker.ts` supplies the real dependencies:
 
 - `background/provider-registry.ts` — the one place a provider package is
-  named (`{ spotify: () => createSpotifyProvider() }` today). Everything
-  else resolves a provider name to an already-built `MusicProvider`
-  through this map, never by importing a provider package itself.
+  named. `getProvider(name, config?)` resolves a name to an
+  already-built `MusicProvider`; `config` (currently just `clientId`)
+  exists for the auth exchange (see "OAuth flow" below) — nothing outside
+  this file imports a provider package itself.
 - `background/session-store.ts` — an in-memory `Map<provider,
-AuthSession>`. **Nothing populates it yet.** There's no OAuth redirect
-  flow in this repository, and building one needs a registered Spotify
-  Developer app (`clientId`/`clientSecret`) — an external credential, and
-  per CLAUDE.md §4.4 "Connect provider account" belongs in `services/api`
-  once it exists, not in the extension. Until then, `UserClickedTransfer`
-  fails with a clear, honest reason ("spotify isn't connected yet…")
-  instead of a fake or silent success. See ADR-0012 for why this is a
-  deliberate stopping point, not an oversight.
+AuthSession>`, populated by a real login as of PR7 — see "OAuth flow".
+  Before that existed, `UserClickedTransfer` failed with a clear, honest
+  reason ("spotify isn't connected yet…") instead of a fake or silent
+  success; that path still runs for anyone who hasn't connected yet
+  (ADR-0012).
 - Source and destination are always the same connected provider — there's
   no destination picker yet, and `docs/transfer-engine.md` already
   documents same-provider Dry Run as valid scope.
@@ -308,13 +321,42 @@ whatever happened to be pushed while it was open. See ADR-0015 for why
 share one formatting function (`shared/transfer-panel-state.ts`) so the
 two surfaces can't describe the same state differently.
 
+## OAuth flow
+
+`options/` runs the whole PKCE dance (RFC 7636) and hands background only
+an already-obtained authorization code — see ADR-0014/ADR-0019/ADR-0020.
+
+- `options/pkce.ts` — pure functions (`generateCodeVerifier`,
+  `computeCodeChallenge`, `buildAuthorizeUrl`), no `chrome.*` dependency.
+- `options/spotify-connect.ts` — `connectSpotify(clientId, deps)` takes
+  every browser call injected (`launchWebAuthFlow`, `getRedirectURL`,
+  `authenticate`), the same split `transfer-orchestrator.ts` uses. Builds
+  the authorize URL, runs `chrome.identity.launchWebAuthFlow`, parses
+  `code` out of the redirect, and sends `AuthenticateProvider` to
+  background. Returns `false` — never throws — for every failure mode
+  (user cancels, denies access, or the exchange itself fails).
+- `options/client-id-store.ts` — the Client ID (public by design, not a
+  secret) lives in `chrome.storage.local`, unlike the deliberately
+  session-scoped `tab-transfer-status-store.ts`.
+- `background/service-worker.ts`'s `AuthenticateProvider` handler is the
+  only place that actually calls `provider.authenticate(...)` and stores
+  the resulting session in `SessionStore` — completing what ADR-0012
+  left as "isn't connected yet."
+
+Registering a Spotify Developer app to get a Client ID is still the
+user's own action — nothing in this repository does or can do that step
+(ADR-0014).
+
 ## Context boundaries
 
 Enforced by ESLint (`eslint.config.js`), not just convention:
 
-- `content/` and `popup/` may **not** import any `@ekusupo/*` package,
-  directly or type-only. They only ever know `shared/`'s message types —
-  they ask background to do everything else.
+- `content/`, `popup/`, and `options/` may **not** import any
+  `@ekusupo/*` package, directly or type-only. They only ever know
+  `shared/`'s message types — they ask background to do everything else.
+  (`options/` never had this stated as its own rule until PR7 —
+  `extensionOptionsStaysThin` — an oversight, not a deliberate exception;
+  its code already satisfied it.)
 - `background/` **may** import `@ekusupo/core`, `@ekusupo/connector-sdk`,
   and `@ekusupo/provider-*` (since PR5) — it's the only context that does.
 - `shared/` may not import any `@ekusupo/*` package or reach into a
@@ -383,7 +425,11 @@ later PR adds exactly the permission its new capability needs, not
 proactively. PR5 added `host_permissions: ["https://api.spotify.com/*"]`
 — the first PR whose background code actually calls the Spotify API. PR6
 added `"permissions": ["storage"]` — the first PR whose code reads/writes
-`chrome.storage` (ADR-0015).
+`chrome.storage` (ADR-0015). PR7 added `"permissions": ["identity"]` (the
+PKCE redirect flow) and `host_permissions` for
+`https://accounts.spotify.com/*` (the token exchange endpoint, present in
+`packages/providers/spotify` since v0.1 but genuinely unreachable from
+the extension until something finally called it — ADR-0020).
 
 ## Testing approach
 
@@ -412,9 +458,10 @@ verified by manually loading the built extension (see
 - Whether `shared/`'s future messaging types should also be usable from
   `apps/web` (Phase 6) isn't decided — revisit once the web dashboard
   exists and the actual overlap becomes concrete.
-- Real `AuthenticateProvider` — needs a PKCE auth path (the extension is
-  a public client; `packages/providers/spotify`'s current flow assumes a
-  confidential one — see ADR-0014, Proposed) and a registered Spotify
-  Developer app (external credential, still needed even with PKCE). This
-  is the actual blocker for a live, end-to-end Dry Run demo; see
-  ADR-0012 and ADR-0014. Not scoped to any PR yet — waiting on a decision.
+- Registering an actual Spotify Developer app for a Client ID — the only
+  remaining piece of ADR-0014 nothing in this repository can do; it's the
+  user's own action, still open.
+- A destination picker and a second provider in the extension's own UI —
+  `@ekusupo/provider-upf-file` and the Transfer Engine's write-through
+  mode (ADR-0016, ADR-0018) exist at the platform level, but nothing in
+  `apps/extension` surfaces a choice of destination yet — v0.3.0-alpha.

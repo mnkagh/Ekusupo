@@ -72,7 +72,9 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
 - **PR6 — Progress UI**: the injected panel now shows PR5's Dry Run
   progress live — a disabled Transfer button with the current step while
   running, a match/skip/fail summary on completion, or the failure reason
-  on failure — see "Progress UI" below and ADR-0013.
+  on failure — see "Progress UI" below and ADR-0013. The popup also shows
+  the active tab's last known status, via `chrome.storage.session` — see
+  ADR-0015.
 
 ## What's deferred to later PRs
 
@@ -80,8 +82,8 @@ Browser Extension MVP (v0.2.0-alpha, per `ROADMAP.md`) is now feature
 complete for PR1–PR6. What's left is out of this phase's scope:
 
 - Real `AuthenticateProvider` (OAuth) — see "Transfer integration" below
-  and ADR-0012's "Deferred / Open Questions."
-- Popup progress display — see ADR-0013's "Deferred / Not This PR."
+  and ADR-0012's "Deferred / Open Questions," plus ADR-0014 (Proposed,
+  pending a decision on registering a Spotify Developer app).
 - Live Transfer, a destination picker, and a second provider — v0.3.0-alpha.
 
 ## Messaging layer
@@ -93,7 +95,7 @@ interface — every message type's payload and response in one place:
 interface MessageMap {
   DetectCurrentPage: { payload: undefined; response: { resource: DetectedResource | null } };
   StartTransfer: { payload: StartTransferPayload; response: { jobId: string } };
-  GetTransferStatus: { payload: { jobId: string }; response: { status: TransferStatus } };
+  GetTabTransferState: { payload: { tabId: number }; response: { state: TransferPanelState } };
   AuthenticateProvider: { payload: { provider: string }; response: { connected: boolean } };
   ReadPageMetadata: { payload: undefined; response: { resource: DetectedResource | null } };
   InjectUI: { payload: { resource: DetectedResource }; response: { injected: boolean } };
@@ -118,19 +120,18 @@ interface MessageMap {
 Grouped by direction (who sends it, who's expected to handle it):
 
 - **Popup → Background**: `DetectCurrentPage`, `StartTransfer`,
-  `GetTransferStatus`, `AuthenticateProvider`.
+  `GetTabTransferState`, `AuthenticateProvider`.
 - **Background → Content**: `ReadPageMetadata`, `InjectUI`,
   `HighlightPlaylist`.
 - **Content → Background**: `CurrentResource`, `UserClickedTransfer`.
-- **Background → Content** (also, in the original design, Popup):
-  `TransferProgress`, `TransferCompleted`, `TransferFailed` — push-style;
-  background sends these unsolicited as a transfer progresses, rather
-  than in response to a request. As of PR6 these go to the tab that
-  started the transfer (`sender.tab?.id`, see "Progress UI"), since
-  that's where the button that triggered it lives — the popup has no
-  transfer UI yet. (A known limitation, still open: MV3 popups are
-  ephemeral and there's no durable store, so a popup opened mid-transfer
-  still shows nothing — see ADR-0013.)
+- **Background → Content**: `TransferProgress`, `TransferCompleted`,
+  `TransferFailed` — push-style; background sends these unsolicited as a
+  transfer progresses, to the tab that started it (`sender.tab?.id`, see
+  "Progress UI"). Background also persists the same state via
+  `chrome.storage.session`, keyed by tab — so a popup opened at any
+  point can ask for it with `GetTabTransferState` even though it isn't
+  pushed these messages directly (MV3 popups are ephemeral; a push sent
+  while one is closed would just be lost). See ADR-0015.
 
 Two sender helpers, because Chrome's messaging API itself is asymmetric —
 this isn't hidden, it's modeled directly:
@@ -151,7 +152,7 @@ to that specific call's response in Manifest V3.
 type imported from `@ekusupo/*`, not even type-only.** A live
 `MusicProvider` or `AuthSession` instance cannot cross `chrome.runtime`'s
 message boundary regardless (it isn't structured-cloneable), so background
-holds those and only ever sends small summaries (`TransferStatus`,
+holds those and only ever sends small summaries (`TransferPanelState`,
 `TransferReportSummary`) shaped like, but independent of, `@ekusupo/core`'s
 `TransferJobStatus`/`TransferReport`. See ADR-0008.
 
@@ -282,13 +283,13 @@ Engine's own `TransferJob.id` isn't known until the call resolves — see
 ADR-0013).
 
 `content-script.ts` registers handlers for all three and calls
-`injectionManager.updateTransferState(state)`, where `TransferState` is a
-small union — `idle | running | completed | failed` — built directly from
-the wire payloads (`ActionPanel.tsx`). No new progress vocabulary is
-invented on top of what the engine already reports, per the user's
-explicit instruction for this phase. There's at most one active transfer
-per tab, so nothing correlates by job id — whatever message arrives
-applies to whatever the panel currently shows.
+`injectionManager.updateTransferState(state)`, where `TransferPanelState`
+(`shared/messages.ts`) is a small union — `idle | running | completed |
+failed` — built directly from the wire payloads. No new progress
+vocabulary is invented on top of what the engine already reports, per the
+user's explicit instruction for this phase. There's at most one active
+transfer per tab, so nothing correlates by job id — whatever message
+arrives applies to whatever the panel currently shows.
 
 `InjectionManager` remembers the last shown `resource`/`callbacks` so
 `updateTransferState()` can re-render in place; a fresh `show()` (a newly
@@ -296,9 +297,16 @@ detected resource) resets state back to `idle`. Clicking Transfer also
 sets `running` optimistically before the round-trip completes, so the
 button responds immediately rather than appearing inert.
 
-This surfaces Dry Run's real progress today; it does **not** yet surface
-anything in the popup — see ADR-0013 for why that's deliberately
-deferred, not dropped.
+`background/tab-transfer-status-store.ts` persists the same
+`TransferPanelState`, keyed by tab, to `chrome.storage.session` at the
+same point it's pushed to the tab. `popup/Popup.tsx` asks for it
+(`GetTabTransferState`) on mount, using `chrome.tabs.query({ active:
+true, currentWindow: true })` to find which tab it's looking at — so
+opening the popup at any point shows the real current state, not just
+whatever happened to be pushed while it was open. See ADR-0015 for why
+`chrome.storage.session` specifically, and both this and `ActionPanel.tsx`
+share one formatting function (`shared/transfer-panel-state.ts`) so the
+two surfaces can't describe the same state differently.
 
 ## Context boundaries
 
@@ -373,7 +381,9 @@ requests nothing beyond `content_scripts` matching
 `*://open.spotify.com/*` — no `permissions`, no `host_permissions`. Each
 later PR adds exactly the permission its new capability needs, not
 proactively. PR5 added `host_permissions: ["https://api.spotify.com/*"]`
-— the first PR whose background code actually calls the Spotify API.
+— the first PR whose background code actually calls the Spotify API. PR6
+added `"permissions": ["storage"]` — the first PR whose code reads/writes
+`chrome.storage` (ADR-0015).
 
 ## Testing approach
 
@@ -402,8 +412,9 @@ verified by manually loading the built extension (see
 - Whether `shared/`'s future messaging types should also be usable from
   `apps/web` (Phase 6) isn't decided — revisit once the web dashboard
   exists and the actual overlap becomes concrete.
-- Real `AuthenticateProvider` — needs an OAuth redirect flow and a
-  registered Spotify Developer app (external credential), plus a decision
-  on where the client secret lives (likely `services/api`, CLAUDE.md
-  §4.4). This is the actual blocker for a live, end-to-end Dry Run demo;
-  see ADR-0012. Not scoped to any PR yet.
+- Real `AuthenticateProvider` — needs a PKCE auth path (the extension is
+  a public client; `packages/providers/spotify`'s current flow assumes a
+  confidential one — see ADR-0014, Proposed) and a registered Spotify
+  Developer app (external credential, still needed even with PKCE). This
+  is the actual blocker for a live, end-to-end Dry Run demo; see
+  ADR-0012 and ADR-0014. Not scoped to any PR yet — waiting on a decision.

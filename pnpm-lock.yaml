@@ -165,6 +165,15 @@ importers:
 
   services/api:
     dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@ekusupo/provider-spotify':
+        specifier: workspace:*
+        version: link:../../packages/providers/spotify
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../packages/upf
       '@electric-sql/pglite':
         specifier: ^0.3.0
         version: 0.3.16

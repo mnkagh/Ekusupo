@@ -1,11 +1,10 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 
 import { AuthError, AuthService } from "../auth/auth-service.js";
+import { SESSION_COOKIE_NAME, requireAuth, setSessionCookie } from "../auth/session-cookie.js";
 import type { SessionStore } from "../auth/session-store.js";
 import type { UserStore } from "../auth/user-store.js";
 import { toPublicUser } from "../auth/user.js";
-
-export const SESSION_COOKIE_NAME = "ekusupo_session";
 
 export interface AuthRoutesDeps {
   userStore: UserStore;
@@ -27,17 +26,6 @@ const credentialsSchema = {
   },
 };
 
-function setSessionCookie(reply: FastifyReply, sessionId: string, expiresAt: string): void {
-  reply.setCookie(SESSION_COOKIE_NAME, sessionId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    // Plain HTTP in local dev; a real deployment is always HTTPS. See ADR-0022.
-    secure: process.env.NODE_ENV === "production",
-    expires: new Date(expiresAt),
-  });
-}
-
 /** AuthError is a user-facing 400; anything else is a real server error and should propagate. */
 function isAuthError(error: unknown): error is AuthError {
   return error instanceof AuthError;
@@ -49,7 +37,7 @@ function isAuthError(error: unknown): error is AuthError {
  * `authService` is constructed once here rather than per-request. See
  * ADR-0022.
  */
-export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): void {
+export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): AuthService {
   const authService = new AuthService(deps);
 
   app.post<CredentialsBody>(
@@ -99,13 +87,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
   });
 
   app.get("/auth/me", async (request, reply) => {
-    const sessionId = request.cookies[SESSION_COOKIE_NAME];
-    const user = sessionId ? await authService.getUserForSession(sessionId) : undefined;
-
-    if (!user) {
-      reply.code(401);
-      return { error: "not_authenticated" };
-    }
+    const user = await requireAuth(request, reply, authService);
+    if (!user) return;
     return { user: toPublicUser(user) };
   });
+
+  return authService;
 }

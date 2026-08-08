@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 
+import { SESSION_COOKIE_NAME } from "../auth/session-cookie.js";
 import { buildServer } from "../server.js";
-import { SESSION_COOKIE_NAME } from "./auth-routes.js";
 
 let app: FastifyInstance;
 

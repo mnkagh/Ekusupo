@@ -7,12 +7,19 @@ import { InMemorySessionStore } from "./auth/session-store.js";
 import type { SessionStore } from "./auth/session-store.js";
 import { InMemoryUserStore } from "./auth/user-store.js";
 import type { UserStore } from "./auth/user-store.js";
+import { InMemoryProviderConnectionStore } from "./providers/provider-connection-store.js";
+import type { ProviderConnectionStore } from "./providers/provider-connection-store.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
+import type { ProviderRoutesConfig, ProviderRoutesDeps } from "./routes/provider-routes.js";
+import { registerProviderRoutes } from "./routes/provider-routes.js";
 
 export interface BuildServerOptions {
   corsOrigin?: string;
   userStore?: UserStore;
   sessionStore?: SessionStore;
+  providerConnectionStore?: ProviderConnectionStore;
+  providerRoutesConfig?: ProviderRoutesConfig;
+  createSpotifyProviderImpl?: ProviderRoutesDeps["createSpotifyProviderImpl"];
 }
 
 /**
@@ -34,9 +41,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  registerAuthRoutes(app, {
+  const authService = registerAuthRoutes(app, {
     userStore: options.userStore ?? new InMemoryUserStore(),
     sessionStore: options.sessionStore ?? new InMemorySessionStore(),
+  });
+
+  registerProviderRoutes(app, {
+    authService,
+    providerConnectionStore:
+      options.providerConnectionStore ?? new InMemoryProviderConnectionStore(),
+    config: options.providerRoutesConfig,
+    createSpotifyProviderImpl: options.createSpotifyProviderImpl,
   });
 
   return app;

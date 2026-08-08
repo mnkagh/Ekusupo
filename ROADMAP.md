@@ -19,48 +19,73 @@ transfer engine, matching engine, reports."
 - ✅ Matching Engine v0.1 (ADR-0006)
 - ✅ Transfer Engine v0.1 (ADR-0006), split into explicit Dry Run / Live
   Transfer execution modes (ADR-0011)
-- ✅ `feature/transfer-engine-v1.1` merged into `develop`
 
 ## v0.2.0-alpha — First client wired end-to-end
 
 The browser extension proves a real client can consume the platform
-without duplicating business logic (CLAUDE.md §3.3, §7).
+without duplicating business logic (CLAUDE.md §3.3, §7). **Complete.**
 
 - ✅ Extension foundation, typed messaging (PR1–2)
 - ✅ Resource detection (PR3)
 - ✅ UI injection — floating action panel (PR4, ADR-0010)
-- ⬜ Transfer integration using Dry Run (PR5) — next: merge `develop`
-  (now has the real Transfer/Matching Engine and ADR-0011's
-  execution-mode split) into `feature/browser-extension`
-- ⬜ Progress UI (PR6)
+- ✅ Transfer integration using Dry Run (PR5, ADR-0012)
+- ✅ Progress UI, including popup status via `chrome.storage.session`
+  (PR6, ADR-0013, ADR-0015)
+- 🔶 Real `AuthenticateProvider` (OAuth) — Proposed, not started
+  (ADR-0014). Needs a PKCE redesign of `packages/providers/spotify`'s
+  auth flow (the extension is a public client) _and_ a registered
+  Spotify Developer app (external credential, still needed even with
+  PKCE). This is the actual blocker for a live, end-to-end Dry Run demo.
+  Waiting on a decision — see ADR-0014's "Question for the user."
 
 ## v0.3.0-alpha — Cross-provider transfer proven
 
 Live Transfer validated against a real second provider, and the web app
 becomes the primary dashboard (CLAUDE.md §8).
 
-- ⬜ Second provider connector — deliberately not started yet; per
-  CLAUDE.md §3.2 no provider is architecturally special, so the second
-  connector's job is to validate cross-provider transfer, not to
-  compensate for engine behavior the engine should already handle
-  (see ADR-0011's "Alternatives Considered")
-- ⬜ Web Dashboard MVP (CLAUDE.md §8.2 screens)
-- ⬜ Live Transfer demonstrated source → destination across two real
-  providers
+- ✅ Second provider connector — `@ekusupo/provider-upf-file` (ADR-0016),
+  a local UPF file connector. Every commercial streaming provider (Apple
+  Music, YouTube Music, Deezer, TIDAL) needs its own registered developer
+  credentials, the same blocker as Spotify's OAuth — a file connector
+  needed none of that, and is already a documented connector category
+  (CLAUDE.md §6.2, §2.3), not a workaround.
+- ✅ Cross-provider **Dry Run** proven — `runDryRunTransfer` with
+  `@ekusupo/provider-spotify` and `@ekusupo/provider-upf-file`, two real,
+  independently-implemented connectors, not `packages/core`'s own
+  in-test fakes (`tests/integration/`).
+- ⬜ Cross-provider **Live Transfer** — **not proven, and the file
+  connector can't prove it.** `runLiveTransfer` writes whatever the
+  destination's own `tracks.search` returns, not the source track
+  directly (find-the-equivalent-recording semantics) — a file has no
+  catalog to search, so it can never honestly satisfy that. This isn't a
+  bug (ADR-0016); it means Live Transfer still needs either a second real
+  **catalog** provider (blocked on external credentials, like Spotify)
+  or a deliberate Transfer Engine write-through mode (not proposed —
+  no real destination exists yet to design it against).
+- ⬜ Web Dashboard MVP (CLAUDE.md §8.2 screens) — not started. Needs a
+  tech-stack decision first (framework for `apps/web`, `services/api`,
+  a database, an auth strategy) — CLAUDE.md §14.1 lists these as
+  existing pieces of the architecture, but which specific technologies
+  fill them in hasn't been decided, and that's a bigger, harder-to-reverse
+  call than anything scaffolded so far. Flagged for a decision, not
+  started unilaterally.
 
 ## Later (post-MVP)
 
 Not sequenced yet — see `docs/vision.md`'s "Future Vision" and
-CLAUDE.md §2.3 for the full list. Highlights: Sync Engine, Backup Engine,
-AI-assisted matching (Phase 7), Desktop app, Telegram companion.
+CLAUDE.md §2.3 for the full list. Highlights: Sync Engine, **Backup
+Engine** (the natural home for what a file/export connector like
+`@ekusupo/provider-upf-file` is actually for — see ADR-0016), AI-assisted
+matching (Phase 7), Desktop app, Telegram companion.
 
 ## Notes on this roadmap
 
 - Milestones are named as alpha releases, not just feature branches, so
   progress is reviewable and tag-able (`v0.1.0-alpha`, etc.) rather than
   only visible as merged PRs.
-- Architectural phases are not skipped: v0.2.0-alpha's PR5/PR6 must land
-  before v0.3.0-alpha's Web Dashboard work begins, per the project's
-  standing sequencing decision.
+- "Second provider done" and "Live Transfer proven" are tracked as
+  separate line items on purpose (ADR-0016) — the first didn't
+  automatically deliver the second, and conflating them would have
+  overstated what's actually been validated.
 - This file should be updated whenever a milestone's scope changes —
   outdated roadmaps are worse than missing ones (CLAUDE.md §18.4).

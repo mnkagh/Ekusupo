@@ -9,7 +9,8 @@ export type {
   MessageType,
   ResourceType,
   StartTransferPayload,
+  TransferPanelState,
   TransferProgressPayload,
   TransferReportSummary,
-  TransferStatus,
 } from "./messages.js";
+export { describeTransferPanelState } from "./transfer-panel-state.js";

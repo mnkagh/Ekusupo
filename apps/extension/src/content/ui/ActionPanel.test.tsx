@@ -2,8 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DetectedResource } from "../../shared/messages.js";
-import type { TransferState } from "./ActionPanel.js";
+import type { DetectedResource, TransferPanelState } from "../../shared/messages.js";
 import { ActionPanel } from "./ActionPanel.js";
 
 // See apps/extension/src/popup/Popup.test.tsx for why this is explicit.
@@ -15,10 +14,10 @@ const resource: DetectedResource = {
   resourceId: "37i9dQZF1DXcBWIGoYBM5M",
 };
 
-const idle: TransferState = { kind: "idle" };
+const idle: TransferPanelState = { kind: "idle" };
 
 function renderPanel(
-  transferState: TransferState = idle,
+  transferState: TransferPanelState = idle,
   overrides: Partial<{
     onTransfer: () => void;
     onPreview: () => void;

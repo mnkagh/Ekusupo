@@ -8,8 +8,12 @@ for the build-tooling rationale.
 
 ## Status
 
-Foundation only: a Fastify server that starts and answers `GET /health`.
-No real routes, no database, no auth — see ADR-0021's "What's deferred."
+`GET /health`, plus real auth: `POST /auth/sign-up`, `POST /auth/sign-in`,
+`POST /auth/sign-out`, `GET /auth/me` — session cookies, real password
+hashing, backed by in-memory stores for now. See
+`docs/decisions/0022-web-dashboard-auth-v1.md` for what that means and
+what's still deferred (a real Postgres-backed store, `apps/web`'s
+sign-in UI, password reset).
 
 ## Running it
 

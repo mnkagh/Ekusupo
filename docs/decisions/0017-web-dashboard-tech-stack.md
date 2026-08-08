@@ -1,6 +1,8 @@
 # ADR-0017: Web Dashboard Tech Stack (`apps/web`, `services/api`, Database, Auth)
 
-Status: Proposed
+Status: Accepted — all four recommendations (React + Vite, Fastify,
+PostgreSQL, own session-based auth) confirmed by the user with no
+constraints raised.
 
 ## Context
 
@@ -76,15 +78,13 @@ Once `services/api` and a database exist, ADR-0014's Spotify OAuth gap
 has somewhere correct to live; still needs the actual Spotify Developer
 app registration (external credential) regardless of stack.
 
-## Question for the user
+## Decision confirmed
 
-Do the four **A** recommendations (React+Vite, Fastify, PostgreSQL, own
-session auth) work for you, or is there a constraint I don't have
-visibility into — hosting target, existing infrastructure, a technology
-you already know you want or want to avoid? Once confirmed, I'll write
-the Accepted version of this ADR and start scaffolding `apps/web` and
-`services/api` the same way `apps/extension` was scaffolded (ADR-0007
-first, then real code).
+Confirmed: React + Vite, Fastify, PostgreSQL, own session-based auth — no
+additional constraints raised. Tooling scaffolding for `apps/web` and
+`services/api` follows the same "tooling ADR first, then real code"
+sequencing `apps/extension` used (ADR-0007) — a separate, dedicated ADR
+per app once each is actually built out, not folded into this one.
 
 ## Consequences if adopted
 

@@ -243,13 +243,16 @@ stays opinion-free about transfers.
 - AI-assisted matching — Phase 7.
 - Real job persistence/queueing, retries across process restarts.
 - The API layer that will eventually call `runTransfer` (`services/api`).
-- A second real provider connector to transfer _between_ — v0.1's tests
-  validate provider-agnostic orchestration using fake in-test providers
-  (see `packages/core/src/run-transfer.test.ts`), not a live cross-provider
-  transfer. As of ADR-0011 this only blocks **Live Transfer**: Dry Run
-  works today against a single real provider used as both source and
-  destination (or with no destination at all beyond capability checks),
-  since it never requires destination write capabilities.
+- A second real **catalog** provider to Live Transfer _between_ —
+  `@ekusupo/provider-upf-file` (ADR-0016) is a second real provider, and
+  proves cross-provider Dry Run (`tests/integration`) beyond the fake
+  in-test providers `packages/core/src/run-transfer.test.ts` uses, but a
+  file has no searchable catalog, so it can't be a `runLiveTransfer`
+  destination — that needs another provider with real `tracks.search`,
+  which (like Spotify) needs its own external credentials. Dry Run works
+  today against a single real provider used as both source and
+  destination, or two different real providers, since it never requires
+  destination write or search capabilities (ADR-0011).
 
 ## Deferred / Open Questions
 

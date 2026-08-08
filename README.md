@@ -188,16 +188,12 @@ The project values:
 - Maintainable code.
 - Respect for platform rules.
 
-## Current Next Steps
+## Current Status and Next Steps
 
-1. Complete the initial documentation set.
-2. Decide the first technical stack.
-3. Define UPF v0.1.
-4. Define Connector SDK v0.1.
-5. Design the transfer engine.
-6. Scaffold the monorepo.
-7. Implement the first two provider connectors.
-8. Build the browser extension and web app MVP.
+See `ROADMAP.md` for actively-maintained, milestone-by-milestone status
+(what's done, what's in progress, and why anything not-yet-started is
+blocked). This section intentionally isn't a second copy of that list —
+two roadmaps drifting out of sync would be worse than one.
 
 ## License
 

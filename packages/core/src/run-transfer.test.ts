@@ -10,7 +10,7 @@ import { ConnectorError } from "@ekusupo/connector-sdk";
 import type { Playlist, Track } from "@ekusupo/upf";
 import { describe, expect, it } from "vitest";
 
-import { runDryRunTransfer, runTransfer } from "./run-transfer.js";
+import { runDryRunTransfer, runLiveTransfer, runTransfer } from "./run-transfer.js";
 import { InMemoryTransferJobStore } from "./transfer-job-store.js";
 
 const sourceSession: AuthSession = { method: "none", raw: {} };
@@ -124,6 +124,47 @@ function makeReadOnlyDestination(): MusicProvider {
     authenticate: async () => ({ method: "none", raw: {} }),
     refreshAuthentication: async (session) => session,
     revokeAuthentication: async () => {},
+  };
+}
+
+interface WriteThroughDestination extends MusicProvider {
+  createdPlaylists: CreatePlaylistInput[];
+  addedTracks: { playlistId: string; tracks: Track[] }[];
+}
+
+/**
+ * Mirrors `@ekusupo/provider-upf-file`'s declared capabilities exactly —
+ * `playlists.create`/`playlists.addTracks`, deliberately no
+ * `tracks.search` (no catalog to search). Used to prove Live Transfer's
+ * write-through mode without a real filesystem — see ADR-0018.
+ */
+function makeWriteThroughDestination(): WriteThroughDestination {
+  const createdPlaylists: CreatePlaylistInput[] = [];
+  const addedTracks: { playlistId: string; tracks: Track[] }[] = [];
+  const capabilities = new Set<ProviderCapability>(["playlists.create", "playlists.addTracks"]);
+
+  return {
+    manifest: {
+      name: "write-through-destination",
+      displayName: "Write-through Destination",
+      version: "0.0.0",
+      authenticationMethods: ["none"],
+      supportedCapabilities: capabilities,
+    },
+    getCapabilities: () => ({ supports: capabilities }),
+    authenticate: async () => ({ method: "none", raw: {} }),
+    refreshAuthentication: async (session) => session,
+    revokeAuthentication: async () => {},
+    createPlaylist: async (_session, input) => {
+      createdPlaylists.push(input);
+      return { id: "dest-playlist-1", title: input.title, items: [] };
+    },
+    addTracksToPlaylist: async (_session, playlistId, tracks) => {
+      addedTracks.push({ playlistId, tracks });
+      return { id: playlistId, title: "dest-playlist", items: tracks.map((t) => ({ track: t })) };
+    },
+    createdPlaylists,
+    addedTracks,
   };
 }
 
@@ -372,6 +413,81 @@ describe("runTransfer", () => {
       expect(report.providerLimitationsEncountered).toEqual([
         "Source provider cannot read playlists.",
       ]);
+    });
+  });
+
+  describe("live transfer write-through mode (ADR-0018)", () => {
+    it("writes source tracks through as-is when the destination can't search", async () => {
+      const songA = track({ id: "s1", title: "Song A", externalIds: { isrc: "ISRC-A" } });
+      const songB = track({ id: "s2", title: "Song B", externalIds: { isrc: "ISRC-B" } });
+      const source = makeSource(playlist([songA, songB]));
+      const destination = makeWriteThroughDestination();
+
+      const { job, report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(job.status).toBe("completed");
+      expect(report.totalItems).toBe(2);
+      expect(report.createdItems).toBe(2);
+      // No catalog was searched, so nothing was "matched" — the report
+      // stays honest about that even though both items were written.
+      expect(report.matchedItems).toBe(0);
+      expect(report.failedItems).toBe(0);
+      expect(report.providerLimitationsEncountered).toEqual([
+        "Destination provider cannot search tracks — items are written through as-is, without matching.",
+      ]);
+
+      expect(destination.addedTracks).toHaveLength(2);
+      // The exact source tracks were written — not a fabricated or
+      // relabeled candidate (ADR-0016's original objection).
+      expect(destination.addedTracks[0]?.tracks).toEqual([songA]);
+      expect(destination.addedTracks[1]?.tracks).toEqual([songB]);
+    });
+
+    it("still requires create and addTracks capabilities even without search", async () => {
+      const source = makeSource(playlist([track({ id: "s1", title: "Song A" })]));
+      const destination = makeDestination({
+        capabilities: [],
+        search: async () => ({ items: [] }),
+      });
+
+      const { job, report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(job.status).toBe("failed");
+      expect(report.providerLimitationsEncountered).toEqual([
+        "Destination provider cannot create or populate playlists.",
+      ]);
+    });
+
+    it("reports a write failure without throwing, same as the match-based path", async () => {
+      const source = makeSource(playlist([track({ id: "s1", title: "Song A" })]));
+      const destination = makeWriteThroughDestination();
+      destination.addTracksToPlaylist = async () => {
+        throw new ConnectorError("provider_unavailable", "disk full", { retryable: false });
+      };
+
+      const { job, report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(job.status).toBe("partial");
+      expect(report.failedItems).toBe(1);
+      expect(report.userActionsRequired).toHaveLength(1);
     });
   });
 });

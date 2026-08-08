@@ -4,7 +4,7 @@ import { buildServer } from "./server.js";
 
 describe("buildServer", () => {
   it("responds to GET /health without binding a real port", async () => {
-    const app = buildServer();
+    const app = await buildServer();
 
     const response = await app.inject({ method: "GET", url: "/health" });
 

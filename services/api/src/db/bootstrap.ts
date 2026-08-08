@@ -28,4 +28,15 @@ export async function ensureSchema(db: Database): Promise<void> {
       expires_at TIMESTAMPTZ NOT NULL
     )
   `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS provider_connections (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      encrypted_tokens TEXT NOT NULL,
+      connected_at TIMESTAMPTZ NOT NULL,
+      UNIQUE (user_id, provider)
+    )
+  `);
 }

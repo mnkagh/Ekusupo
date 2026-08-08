@@ -4,5 +4,10 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/connector-sdk" },
+    { "path": "../../packages/providers/spotify" },
+    { "path": "../../packages/upf" }
+  ]
 }

@@ -16,6 +16,9 @@ out/
 .env.*
 !.env.example
 
+# Local pglite database (services/api) — see ADR-0024
+services/api/data/
+
 # Logs
 *.log
 npm-debug.log*

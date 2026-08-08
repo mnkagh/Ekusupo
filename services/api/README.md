@@ -10,10 +10,11 @@ for the build-tooling rationale.
 
 `GET /health`, plus real auth: `POST /auth/sign-up`, `POST /auth/sign-in`,
 `POST /auth/sign-out`, `GET /auth/me` — session cookies, real password
-hashing, backed by in-memory stores for now. See
-`docs/decisions/0022-web-dashboard-auth-v1.md` for what that means and
-what's still deferred (a real Postgres-backed store, `apps/web`'s
-sign-in UI, password reset).
+hashing, backed by a real Postgres database (`docs/decisions/0024-postgres-via-pglite.md`
+— `pglite`, an embedded real Postgres, since this environment has no
+Docker or installed Postgres server; a hosted Postgres later is a
+same-schema driver swap, not implemented/verified yet). Data persists
+across restarts in `services/api/data/` (gitignored).
 
 ## Running it
 
@@ -21,6 +22,8 @@ sign-in UI, password reset).
 pnpm --filter @ekusupo/api dev
 ```
 
-Runs on `PORT` (default `3000`) via `tsx watch`. `pnpm --filter
+Runs on `PORT` (default `3000`) via `tsx watch`, storing data in
+`DATABASE_PATH` (default `./data/ekusupo-db`, created automatically).
+Delete that directory to reset to a clean database. `pnpm --filter
 @ekusupo/api build` (part of the root `tsc -b`) then `pnpm --filter
 @ekusupo/api start` runs the compiled output.

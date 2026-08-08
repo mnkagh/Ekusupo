@@ -65,15 +65,18 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   injection" below. Buttons send typed messages to `background/`, which
   only acknowledges and logs them for now; no transfer/preview/export
   logic runs yet.
+- **PR5 — Transfer integration**: `UserClickedTransfer` now runs a real
+  `@ekusupo/core` Dry Run via `@ekusupo/provider-spotify` — see "Transfer
+  integration" below and ADR-0012. Preview and Copy UPF stay
+  logging-only; they aren't scoped to a PR yet.
 
 ## What's deferred to later PRs
 
-- **PR5 — Transfer integration**: wiring the background worker to
-  `@ekusupo/core`'s `runTransfer`, via `@ekusupo/providers/spotify`.
-- **PR6 — Progress UI**: surfacing `runTransfer`'s `onProgress` events and
-  final `TransferReport` in the popup/injected UI. The UI reflects the
-  Transfer Engine's own state machine — it does not invent its own
-  progress model (per the user's explicit instruction for this phase).
+- **PR6 — Progress UI**: surfacing PR5's `onProgress` events and final
+  `TransferReport` in the popup/injected UI. Right now they only go to
+  the service worker's console. The UI reflects the Transfer Engine's own
+  state machine — it does not invent its own progress model (per the
+  user's explicit instruction for this phase).
 
 ## Messaging layer
 
@@ -223,6 +226,44 @@ page's CSS from reaching in, and `:host { all: initial; }` in the panel's
 own stylesheet stops it from inheriting page styles (font, color) on the
 way out.
 
+## Transfer integration
+
+`background/transfer-orchestrator.ts` has no `chrome.*` dependency —
+`runDryRunTransferForResource(resource, deps)` takes plain injected
+functions (`getProvider`, `getSession`, `onProgress`, `onCompleted`,
+`onFailed`) and calls `@ekusupo/core`'s `runDryRunTransfer` directly (not
+`runTransfer` — PR5 resumes browser-extension integration with Dry Run
+specifically, per ADR-0011 and ADR-0012). This keeps it unit-testable
+with a fake `MusicProvider`, the same technique `packages/core`'s own
+tests use, with no `chrome` faking needed.
+
+`service-worker.ts` supplies the real dependencies:
+
+- `background/provider-registry.ts` — the one place a provider package is
+  named (`{ spotify: () => createSpotifyProvider() }` today). Everything
+  else resolves a provider name to an already-built `MusicProvider`
+  through this map, never by importing a provider package itself.
+- `background/session-store.ts` — an in-memory `Map<provider,
+AuthSession>`. **Nothing populates it yet.** There's no OAuth redirect
+  flow in this repository, and building one needs a registered Spotify
+  Developer app (`clientId`/`clientSecret`) — an external credential, and
+  per CLAUDE.md §4.4 "Connect provider account" belongs in `services/api`
+  once it exists, not in the extension. Until then, `UserClickedTransfer`
+  fails with a clear, honest reason ("spotify isn't connected yet…")
+  instead of a fake or silent success. See ADR-0012 for why this is a
+  deliberate stopping point, not an oversight.
+- Source and destination are always the same connected provider — there's
+  no destination picker yet, and `docs/transfer-engine.md` already
+  documents same-provider Dry Run as valid scope.
+
+`manifest.json` gained `host_permissions: ["https://api.spotify.com/*"]`
+in PR5 — the first PR whose code path actually performs a cross-origin
+fetch from the background worker.
+
+Outcomes (`onProgress`/`onCompleted`/`onFailed`) currently only reach
+`console.log`/`console.warn` in `service-worker.ts` — sending them to the
+tab as real messages and rendering them is PR6, below.
+
 ## Context boundaries
 
 Enforced by ESLint (`eslint.config.js`), not just convention:
@@ -231,8 +272,7 @@ Enforced by ESLint (`eslint.config.js`), not just convention:
   directly or type-only. They only ever know `shared/`'s message types —
   they ask background to do everything else.
 - `background/` **may** import `@ekusupo/core`, `@ekusupo/connector-sdk`,
-  and `@ekusupo/providers/*` (starting PR5) — it's the only context that
-  does.
+  and `@ekusupo/provider-*` (since PR5) — it's the only context that does.
 - `shared/` may not import any `@ekusupo/*` package or reach into a
   sibling context folder (`../popup/*`, `../background/*`, `../content/*`)
   — it stays a leaf, like `packages/upf` is for the backend graph.
@@ -240,9 +280,11 @@ Enforced by ESLint (`eslint.config.js`), not just convention:
 ## Security boundaries
 
 `background/` is the extension's only privileged context: the only place
-holding a real `AuthSession`, the only place with `host_permissions`-gated
-network access, and (from PR5) the only place that ever imports a
-provider package. `content/` runs inside a page you don't control and
+holding a real `AuthSession` (via `session-store.ts` — currently always
+empty, see "Transfer integration" above), the only place with
+`host_permissions`-gated network access, and (since PR5) the only place
+that ever imports a provider package. `content/` runs inside a page you
+don't control and
 `popup/` is closed as soon as the user clicks away — neither is a safe
 place to hold a token. This is the same reasoning as CLAUDE.md §12.1
 applied to the extension's own runtime: minimize where credentials can
@@ -250,15 +292,16 @@ live, not just how they're transmitted.
 
 ## Adding a future provider
 
-The extension's code never changes to add a provider. `background/` only
-ever imports `@ekusupo/core` and `@ekusupo/connector-sdk` — never a
-specific `@ekusupo/providers/<name>` package by name in extension code
-(the concrete provider gets selected by the caller of `runTransfer`, the
-same provider-agnosticism guarantee `packages/core` already gives the
-backend, CLAUDE.md §3.1). Adding Apple Music or YouTube Music support to
-the extension is purely a backend change (a new provider package) plus,
-eventually, a UI change to list it as a destination option — not an
-extension architecture change.
+`background/provider-registry.ts` is the only place a provider package is
+named — a `Record<string, () => MusicProvider>` map, one entry per
+provider. `transfer-orchestrator.ts`, `session-store.ts`, and everything
+else only ever see an already-resolved `MusicProvider` or a plain name
+string, never a package import (the same provider-agnosticism guarantee
+`packages/core` already gives the backend, CLAUDE.md §3.1). Adding Apple
+Music or YouTube Music support to the extension is a backend change (a
+new provider package) plus one new line in `provider-registry.ts` plus,
+eventually, a UI change to list it as a destination option — not a change
+to the orchestrator or any test written against it.
 
 ## Build tooling
 
@@ -293,7 +336,8 @@ Request only what the current PR actually uses (CLAUDE.md §12.2). PR1
 requests nothing beyond `content_scripts` matching
 `*://open.spotify.com/*` — no `permissions`, no `host_permissions`. Each
 later PR adds exactly the permission its new capability needs, not
-proactively.
+proactively. PR5 added `host_permissions: ["https://api.spotify.com/*"]`
+— the first PR whose background code actually calls the Spotify API.
 
 ## Testing approach
 
@@ -319,3 +363,8 @@ verified by manually loading the built extension (see
 - Whether `shared/`'s future messaging types should also be usable from
   `apps/web` (Phase 6) isn't decided — revisit once the web dashboard
   exists and the actual overlap becomes concrete.
+- Real `AuthenticateProvider` — needs an OAuth redirect flow and a
+  registered Spotify Developer app (external credential), plus a decision
+  on where the client secret lives (likely `services/api`, CLAUDE.md
+  §4.4). This is the actual blocker for a live, end-to-end Dry Run demo;
+  see ADR-0012. Not scoped to any PR yet.

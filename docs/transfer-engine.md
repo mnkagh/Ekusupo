@@ -76,7 +76,8 @@ report says so once.
 ```text
 Validate request
         |
-Check destination capabilities (tracks.search, playlists.create, playlists.addTracks)
+Check destination capabilities (playlists.create, playlists.addTracks — required;
+                                 tracks.search — optional, picks the write strategy below)
         |
 Check source capabilities (playlists.read)
         |
@@ -85,9 +86,13 @@ Read source playlist (source.getPlaylist)
 Create destination playlist (destination.createPlaylist)
         |
 For each track:
-  gather destination candidates (destination.searchTracks)
-  matchTrack(query, candidates)          <- packages/matching
-  write (destination.addTracksToPlaylist)
+  if destination can search (tracks.search):
+    gather destination candidates (destination.searchTracks)
+    matchTrack(query, candidates)          <- packages/matching
+    write the matched destination-native candidate
+  else:
+    write the source track through as-is (no catalog to match against — ADR-0018)
+  write via destination.addTracksToPlaylist
   ConnectorError with retryable=true -> retry once, respecting retryAfterMs
   otherwise -> record as failed, continue with the next track
         |
@@ -96,10 +101,15 @@ Assemble TransferReport
 Persist job status (TransferJobStore)
 ```
 
-Live Transfer requires full destination write capabilities upfront — this
-is unchanged from v0.1's original (pre-ADR-0011) behavior; only Dry Run's
-requirements changed. It's also the only mode that ever calls
-`createPlaylist` or `addTracksToPlaylist`.
+Live Transfer requires `playlists.create`/`playlists.addTracks` upfront,
+unconditionally — this is unchanged from v0.1's original (pre-ADR-0011)
+behavior. `tracks.search` is no longer required (ADR-0018): a
+destination that can search gets the original match-based write (find
+and write the equivalent destination-native track); a destination that
+can't (a file export target has no catalog to search) gets the source
+track written through directly instead of failing outright. Either way,
+Live Transfer is still the only mode that ever calls `createPlaylist` or
+`addTracksToPlaylist`.
 
 A failure on one track never aborts either mode's job — CLAUDE.md §9.3
 requires partial success, not all-or-nothing.
@@ -243,16 +253,13 @@ stays opinion-free about transfers.
 - AI-assisted matching — Phase 7.
 - Real job persistence/queueing, retries across process restarts.
 - The API layer that will eventually call `runTransfer` (`services/api`).
-- A second real **catalog** provider to Live Transfer _between_ —
-  `@ekusupo/provider-upf-file` (ADR-0016) is a second real provider, and
-  proves cross-provider Dry Run (`tests/integration`) beyond the fake
-  in-test providers `packages/core/src/run-transfer.test.ts` uses, but a
-  file has no searchable catalog, so it can't be a `runLiveTransfer`
-  destination — that needs another provider with real `tracks.search`,
-  which (like Spotify) needs its own external credentials. Dry Run works
-  today against a single real provider used as both source and
-  destination, or two different real providers, since it never requires
-  destination write or search capabilities (ADR-0011).
+- A second real **catalog** provider (another streaming or self-hosted
+  service with genuine search) to prove Live Transfer's match-based write
+  path cross-provider — still blocked on external credentials, same as
+  Spotify's own OAuth. `@ekusupo/provider-upf-file` (ADR-0016) proves
+  cross-provider Dry Run (`tests/integration`) and, since ADR-0018, real
+  cross-provider **Live Transfer** via its write-through path — the
+  match-based path specifically still only has fake-provider coverage.
 
 ## Deferred / Open Questions
 

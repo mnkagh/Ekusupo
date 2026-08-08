@@ -53,22 +53,19 @@ becomes the primary dashboard (CLAUDE.md §8).
   `@ekusupo/provider-spotify` and `@ekusupo/provider-upf-file`, two real,
   independently-implemented connectors, not `packages/core`'s own
   in-test fakes (`tests/integration/`).
-- ⬜ Cross-provider **Live Transfer** — **not proven, and the file
-  connector can't prove it.** `runLiveTransfer` writes whatever the
-  destination's own `tracks.search` returns, not the source track
-  directly (find-the-equivalent-recording semantics) — a file has no
-  catalog to search, so it can never honestly satisfy that. This isn't a
-  bug (ADR-0016); it means Live Transfer still needs either a second real
-  **catalog** provider (blocked on external credentials, like Spotify)
-  or a deliberate Transfer Engine write-through mode (not proposed —
-  no real destination exists yet to design it against).
-- ⬜ Web Dashboard MVP (CLAUDE.md §8.2 screens) — not started. Needs a
-  tech-stack decision first (framework for `apps/web`, `services/api`,
-  a database, an auth strategy) — CLAUDE.md §14.1 lists these as
-  existing pieces of the architecture, but which specific technologies
-  fill them in hasn't been decided, and that's a bigger, harder-to-reverse
-  call than anything scaffolded so far. Flagged for a decision, not
-  started unilaterally.
+- ✅ Cross-provider **Live Transfer**, write-through case — `runLiveTransfer`
+  now writes source tracks through directly when the destination can't
+  search (ADR-0018, superseding ADR-0016's original conclusion). Spotify
+  → `@ekusupo/provider-upf-file` proven for real, tracks landing in an
+  actual UPF file on disk (`tests/integration/`), not just fakes.
+- ⬜ Cross-provider Live Transfer, **match-based case** (streaming ↔
+  streaming) — still needs a second real **catalog** provider, blocked on
+  the same external-credential problem as Spotify's own OAuth (ADR-0012,
+  ADR-0014).
+- ⬜ Web Dashboard MVP (CLAUDE.md §8.2 screens) — tech stack decided
+  (ADR-0017: React + Vite, Fastify, PostgreSQL, own session auth).
+  Scaffolding not started yet — a dedicated pass, same size as the
+  browser extension's PR1–6.
 
 ## Later (post-MVP)
 
@@ -83,9 +80,10 @@ matching (Phase 7), Desktop app, Telegram companion.
 - Milestones are named as alpha releases, not just feature branches, so
   progress is reviewable and tag-able (`v0.1.0-alpha`, etc.) rather than
   only visible as merged PRs.
-- "Second provider done" and "Live Transfer proven" are tracked as
+- "Second provider done" and "Live Transfer proven" were tracked as
   separate line items on purpose (ADR-0016) — the first didn't
-  automatically deliver the second, and conflating them would have
-  overstated what's actually been validated.
+  automatically deliver the second. ADR-0018 later closed that gap for
+  the write-through case specifically; the match-based case remains its
+  own separate, still-open line item for the same reason.
 - This file should be updated whenever a milestone's scope changes —
   outdated roadmaps are worse than missing ones (CLAUDE.md §18.4).

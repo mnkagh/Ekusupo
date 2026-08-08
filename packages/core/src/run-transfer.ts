@@ -261,9 +261,40 @@ export async function runDryRunTransfer(params: RunTransferParams): Promise<RunT
 }
 
 /**
- * Validates full destination write capabilities up front, then searches,
- * matches, and writes each track. The only execution mode that mutates the
- * destination — see docs/decisions/0011-transfer-engine-execution-modes.md.
+ * Determines what to write for one source track. When the destination can
+ * search, this is match-based (find the equivalent destination-native
+ * track). When it can't, there's no catalog to match against, so the
+ * source track is written through directly — see ADR-0018.
+ */
+type WritePlan = { kind: "write"; track: Track } | { kind: "skip" };
+
+async function planTrackWrite(
+  sourceTrack: Track,
+  report: TransferReport,
+  destination: { searchTracks?: MusicProvider["searchTracks"] },
+  destinationSession: AuthSession,
+  canSearch: boolean,
+): Promise<WritePlan> {
+  if (!canSearch || !destination.searchTracks) {
+    return { kind: "write", track: sourceTrack };
+  }
+
+  const attempt = await matchAgainstDestination(
+    destination.searchTracks,
+    destinationSession,
+    sourceTrack,
+  );
+  const decision = recordMatchAttempt(report, sourceTrack, attempt);
+  return decision ? { kind: "write", track: decision.candidate } : { kind: "skip" };
+}
+
+/**
+ * Validates full destination write capabilities up front, then writes
+ * each track — matched against the destination's own catalog when it can
+ * search (`tracks.search`), written through as-is when it can't (ADR-0018;
+ * a destination with no catalog, like a file export target, has nothing
+ * to match against). The only execution mode that mutates the destination
+ * — see docs/decisions/0011-transfer-engine-execution-modes.md.
  */
 export async function runLiveTransfer(params: RunTransferParams): Promise<RunTransferResult> {
   const { source, sourceSession, destination, destinationSession, sourcePlaylistId } = params;
@@ -277,9 +308,7 @@ export async function runLiveTransfer(params: RunTransferParams): Promise<RunTra
 
   const destinationCapabilities = destination.getCapabilities();
   const searchTracks = destination.searchTracks;
-  if (!searchTracks || !destinationCapabilities.supports.has("tracks.search")) {
-    return failJob(jobStore, job, report, "Destination provider cannot search tracks.");
-  }
+  const canSearch = Boolean(searchTracks) && destinationCapabilities.supports.has("tracks.search");
 
   const createPlaylist = destination.createPlaylist;
   const addTracksToPlaylist = destination.addTracksToPlaylist;
@@ -294,6 +323,12 @@ export async function runLiveTransfer(params: RunTransferParams): Promise<RunTra
       job,
       report,
       "Destination provider cannot create or populate playlists.",
+    );
+  }
+
+  if (!canSearch) {
+    report.providerLimitationsEncountered.push(
+      "Destination provider cannot search tracks — items are written through as-is, without matching.",
     );
   }
 
@@ -326,13 +361,18 @@ export async function runLiveTransfer(params: RunTransferParams): Promise<RunTra
 
     onProgress?.({ step: "matching", processed: index, total: tracks.length });
 
-    const attempt = await matchAgainstDestination(searchTracks, destinationSession, sourceTrack);
-    const decision = recordMatchAttempt(report, sourceTrack, attempt);
-    if (!decision) continue;
+    const plan = await planTrackWrite(
+      sourceTrack,
+      report,
+      { searchTracks },
+      destinationSession,
+      canSearch,
+    );
+    if (plan.kind === "skip") continue;
 
     onProgress?.({ step: "writing", processed: index, total: tracks.length });
     const writeResult = await callWithRetry(() =>
-      addTracksToPlaylist(destinationSession, destinationPlaylistId, [decision.candidate]),
+      addTracksToPlaylist(destinationSession, destinationPlaylistId, [plan.track]),
     );
 
     if (writeResult.ok) {

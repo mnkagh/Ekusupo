@@ -19,5 +19,11 @@ uses) has to live somewhere that isn't bound by that rule — here.
   `@ekusupo/provider-upf-file` (a real temp file) as destination. This is
   the first proof that provider-agnostic orchestration works across two
   independently-implemented real connectors, not just against
-  `packages/core`'s own in-test fakes. See ADR-0016 for why this
-  demonstrates Dry Run specifically, not Live Transfer.
+  `packages/core`'s own in-test fakes.
+- `cross-provider-live-transfer.test.ts` — `runLiveTransfer`, same two
+  connectors, proving ADR-0018's write-through mode for real: Spotify's
+  tracks actually land in a real UPF file on disk, byte for byte, with no
+  destination catalog search involved. Confirms `ROADMAP.md`'s
+  "cross-provider Live Transfer" for the write-through case; the
+  match-based case (streaming-to-streaming) still only has fake-provider
+  coverage — see ADR-0016.

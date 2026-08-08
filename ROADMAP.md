@@ -74,9 +74,25 @@ becomes the primary dashboard (CLAUDE.md §8).
     server and a real cross-origin `curl` request carrying the browser's
     actual dev origin (not just `.inject()`, which bypasses CORS
     entirely).
-  - ⬜ Postgres-backed `UserStore`/`SessionStore`, connected provider
-    accounts, transfer setup screens, history — the rest of CLAUDE.md
-    §8.2, sequenced after the UI can at least sign someone in.
+  - ✅ Real Postgres via `pglite` (ADR-0024) — `UserStore`/`SessionStore`
+    now backed by a genuine embedded Postgres with on-disk persistence,
+    verified by killing and restarting the server against the same data
+    directory. No Docker/hosted Postgres exists in this environment, so a
+    hosted-driver path remains intentionally unimplemented (documented,
+    not silently skipped).
+  - ✅ Provider connections on `services/api` (ADR-0025) — real OAuth
+    Authorization Code flow for Spotify, AES-256-GCM encrypted token
+    storage in Postgres, CSRF-protected callback, verified with a real
+    booted server (actual `302` redirect to `accounts.spotify.com`).
+    Needs the user's own Spotify Developer Client ID/Secret to complete a
+    live connection — architecture is complete and tested up to that
+    boundary, same class of external-credential gap as PR7's OAuth.
+  - ✅ Connected Providers screen on `apps/web` (ADR-0026) — real
+    connect/disconnect UI wired to the routes above, verified with a real
+    `vite build`.
+  - ⬜ Transfer setup, transfer progress/report, transfer history, UPF
+    import/export, account settings — the remaining CLAUDE.md §8.2
+    screens.
 
 ## Later (post-MVP)
 

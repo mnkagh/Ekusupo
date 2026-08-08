@@ -1,6 +1,11 @@
 # ADR-0016: Second Provider Is a UPF File Connector, Not a Second Streaming Service — And Can't Prove Live Transfer
 
-Status: Accepted
+Status: Accepted — **partially superseded by ADR-0018.** This ADR's
+provider-choice reasoning (a file connector, not a second streaming
+service) still stands. Its conclusion that Live Transfer isn't provable
+with a search-less destination no longer holds — ADR-0018 adds a
+write-through mode specifically for that case, at the user's direction.
+See ADR-0018 for what changed and why.
 
 ## Context
 

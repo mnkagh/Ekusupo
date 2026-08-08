@@ -19,8 +19,7 @@ transfer engine, matching engine, reports."
 - ✅ Matching Engine v0.1 (ADR-0006)
 - ✅ Transfer Engine v0.1 (ADR-0006), split into explicit Dry Run / Live
   Transfer execution modes (ADR-0011)
-- 🔶 Merging `feature/transfer-engine-v1.1` into `develop` — open PR,
-  pending review
+- ✅ `feature/transfer-engine-v1.1` merged into `develop`
 
 ## v0.2.0-alpha — First client wired end-to-end
 
@@ -30,9 +29,9 @@ without duplicating business logic (CLAUDE.md §3.3, §7).
 - ✅ Extension foundation, typed messaging (PR1–2)
 - ✅ Resource detection (PR3)
 - ✅ UI injection — floating action panel (PR4, ADR-0010)
-- ⬜ Transfer integration using Dry Run (PR5) — blocked until
-  `feature/browser-extension` merges the real Transfer/Matching Engine
-  and ADR-0011's execution-mode split from `develop`
+- ⬜ Transfer integration using Dry Run (PR5) — next: merge `develop`
+  (now has the real Transfer/Matching Engine and ADR-0011's
+  execution-mode split) into `feature/browser-extension`
 - ⬜ Progress UI (PR6)
 
 ## v0.3.0-alpha — Cross-provider transfer proven

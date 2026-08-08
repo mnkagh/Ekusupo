@@ -8,6 +8,10 @@
     "build": "vite build && vite build --config vite.content.config.ts"
   },
   "dependencies": {
+    "@ekusupo/connector-sdk": "workspace:*",
+    "@ekusupo/core": "workspace:*",
+    "@ekusupo/provider-spotify": "workspace:*",
+    "@ekusupo/upf": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

@@ -46,6 +46,18 @@ importers:
 
   apps/extension:
     dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@ekusupo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ekusupo/provider-spotify':
+        specifier: workspace:*
+        version: link:../../packages/providers/spotify
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../packages/upf
       react:
         specifier: ^19.2.8
         version: 19.2.8

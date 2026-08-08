@@ -11,6 +11,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "host_permissions": ["https://api.spotify.com/*"],
   "content_scripts": [
     {
       "matches": ["*://open.spotify.com/*"],

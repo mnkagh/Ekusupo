@@ -69,14 +69,20 @@ Four runtime surfaces, mirroring `apps/extension/src/`:
   `@ekusupo/core` Dry Run via `@ekusupo/provider-spotify` — see "Transfer
   integration" below and ADR-0012. Preview and Copy UPF stay
   logging-only; they aren't scoped to a PR yet.
+- **PR6 — Progress UI**: the injected panel now shows PR5's Dry Run
+  progress live — a disabled Transfer button with the current step while
+  running, a match/skip/fail summary on completion, or the failure reason
+  on failure — see "Progress UI" below and ADR-0013.
 
 ## What's deferred to later PRs
 
-- **PR6 — Progress UI**: surfacing PR5's `onProgress` events and final
-  `TransferReport` in the popup/injected UI. Right now they only go to
-  the service worker's console. The UI reflects the Transfer Engine's own
-  state machine — it does not invent its own progress model (per the
-  user's explicit instruction for this phase).
+Browser Extension MVP (v0.2.0-alpha, per `ROADMAP.md`) is now feature
+complete for PR1–PR6. What's left is out of this phase's scope:
+
+- Real `AuthenticateProvider` (OAuth) — see "Transfer integration" below
+  and ADR-0012's "Deferred / Open Questions."
+- Popup progress display — see ADR-0013's "Deferred / Not This PR."
+- Live Transfer, a destination picker, and a second provider — v0.3.0-alpha.
 
 ## Messaging layer
 
@@ -116,12 +122,15 @@ Grouped by direction (who sends it, who's expected to handle it):
 - **Background → Content**: `ReadPageMetadata`, `InjectUI`,
   `HighlightPlaylist`.
 - **Content → Background**: `CurrentResource`, `UserClickedTransfer`.
-- **Background → Popup**: `TransferProgress`, `TransferCompleted`,
-  `TransferFailed` — push-style; background sends these unsolicited as a
-  transfer progresses, rather than in response to a popup request. (A
-  known v0.1 limitation: MV3 popups are ephemeral and only receive these
-  while actually open. Making progress durable across a closed popup is
-  deferred to PR6.)
+- **Background → Content** (also, in the original design, Popup):
+  `TransferProgress`, `TransferCompleted`, `TransferFailed` — push-style;
+  background sends these unsolicited as a transfer progresses, rather
+  than in response to a request. As of PR6 these go to the tab that
+  started the transfer (`sender.tab?.id`, see "Progress UI"), since
+  that's where the button that triggered it lives — the popup has no
+  transfer UI yet. (A known limitation, still open: MV3 popups are
+  ephemeral and there's no durable store, so a popup opened mid-transfer
+  still shows nothing — see ADR-0013.)
 
 Two sender helpers, because Chrome's messaging API itself is asymmetric —
 this isn't hidden, it's modeled directly:
@@ -260,9 +269,36 @@ AuthSession>`. **Nothing populates it yet.** There's no OAuth redirect
 in PR5 — the first PR whose code path actually performs a cross-origin
 fetch from the background worker.
 
-Outcomes (`onProgress`/`onCompleted`/`onFailed`) currently only reach
-`console.log`/`console.warn` in `service-worker.ts` — sending them to the
-tab as real messages and rendering them is PR6, below.
+Outcomes (`onProgress`/`onCompleted`/`onFailed`) now also reach the tab
+that started the transfer as real messages — see "Progress UI" below.
+
+## Progress UI
+
+`service-worker.ts` sends `TransferProgress` / `TransferCompleted` /
+`TransferFailed` to `sender.tab?.id` (captured from the original
+`UserClickedTransfer` message) as `runDryRunTransferForResource`'s
+callbacks fire, tagged with a locally generated attempt id (the Transfer
+Engine's own `TransferJob.id` isn't known until the call resolves — see
+ADR-0013).
+
+`content-script.ts` registers handlers for all three and calls
+`injectionManager.updateTransferState(state)`, where `TransferState` is a
+small union — `idle | running | completed | failed` — built directly from
+the wire payloads (`ActionPanel.tsx`). No new progress vocabulary is
+invented on top of what the engine already reports, per the user's
+explicit instruction for this phase. There's at most one active transfer
+per tab, so nothing correlates by job id — whatever message arrives
+applies to whatever the panel currently shows.
+
+`InjectionManager` remembers the last shown `resource`/`callbacks` so
+`updateTransferState()` can re-render in place; a fresh `show()` (a newly
+detected resource) resets state back to `idle`. Clicking Transfer also
+sets `running` optimistically before the round-trip completes, so the
+button responds immediately rather than appearing inert.
+
+This surfaces Dry Run's real progress today; it does **not** yet surface
+anything in the popup — see ADR-0013 for why that's deliberately
+deferred, not dropped.
 
 ## Context boundaries
 
@@ -349,8 +385,11 @@ doesn't need `jsdom` at all — it stubs a minimal fake `globalThis.chrome`
 directly (the same hand-rolled-fake style used for `MusicProvider` and
 `fetch` elsewhere in this repo, rather than a `chrome`-mocking test
 dependency) and stays on the default `node` environment.
-`background`/`content` are still side-effect stubs with no logic through
-PR2 — nothing meaningful to unit test yet; their PR1 deliverable is
+`background`/`content`'s own entry files (`service-worker.ts`,
+`content-script.ts`) stay untested glue over `chrome.*` — the same split
+PR3 established: real logic lives in plain, injectable functions
+(`transfer-orchestrator.ts`, `InjectionManager`) that unit tests exercise
+directly, and the thin entry files that wire them to `chrome.*` are
 verified by manually loading the built extension (see
 `apps/extension/README.md`).
 

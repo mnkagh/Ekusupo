@@ -139,6 +139,15 @@ importers:
         specifier: workspace:*
         version: link:../upf
 
+  packages/providers/apple-music:
+    dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../upf
+
   packages/providers/spotify:
     dependencies:
       '@ekusupo/connector-sdk':
@@ -149,6 +158,15 @@ importers:
         version: link:../../upf
 
   packages/providers/upf-file:
+    dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../upf
+
+  packages/providers/youtube-music:
     dependencies:
       '@ekusupo/connector-sdk':
         specifier: workspace:*

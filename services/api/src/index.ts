@@ -1,5 +1,6 @@
 import { PostgresSessionStore } from "./auth/postgres-session-store.js";
 import { PostgresUserStore } from "./auth/postgres-user-store.js";
+import { corsOriginsFor } from "./cors-origins.js";
 import { createDb } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import { buildServer } from "./server.js";
@@ -16,7 +17,9 @@ async function main(): Promise<void> {
   const db = createDb(databasePath);
 
   const app = await buildServer({
-    corsOrigin: webAppUrl,
+    // Both loopback spellings, so the dashboard works whether it's
+    // opened at localhost or 127.0.0.1 — see cors-origins.ts.
+    corsOrigin: corsOriginsFor(webAppUrl),
     userStore: new PostgresUserStore(db),
     sessionStore: new PostgresSessionStore(db),
     providerConnectionStore: new PostgresProviderConnectionStore(db),

@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 
+import { corsOriginsFor } from "./cors-origins.js";
 import { PostgresSessionStore } from "./auth/postgres-session-store.js";
 import { PostgresUserStore } from "./auth/postgres-user-store.js";
 import type { SessionStore } from "./auth/session-store.js";
@@ -19,7 +20,8 @@ import { registerTransferRoutes } from "./routes/transfer-routes.js";
 import type { TransferRoutesDeps } from "./routes/transfer-routes.js";
 
 export interface BuildServerOptions {
-  corsOrigin?: string;
+  /** One origin, or several — see `corsOriginsFor`. */
+  corsOrigin?: string | string[];
   userStore?: UserStore;
   sessionStore?: SessionStore;
   providerConnectionStore?: ProviderConnectionStore;
@@ -47,7 +49,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   await app.register(cookie);
   await app.register(cors, {
-    origin: options.corsOrigin ?? "http://localhost:5173",
+    origin: options.corsOrigin ?? corsOriginsFor("http://localhost:5173"),
     credentials: true,
   });
 

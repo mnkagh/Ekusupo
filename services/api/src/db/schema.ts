@@ -1,4 +1,6 @@
-import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+
+import type { TransferReport } from "@ekusupo/core";
 
 /**
  * The real schema behind `UserStore`/`SessionStore` (ADR-0022) — see
@@ -40,3 +42,24 @@ export const providerConnectionsTable = pgTable(
   },
   (table) => [unique().on(table.userId, table.provider)],
 );
+
+/**
+ * `report` is null until the job finishes (ADR-0027) — `runDryRunTransfer`
+ * (`@ekusupo/core`) only returns a `TransferReport` once it resolves, and
+ * the job row is created up front so its live status is queryable while
+ * still running.
+ */
+export const transferJobsTable = pgTable("transfer_jobs", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  sourceProvider: text("source_provider").notNull(),
+  destinationProvider: text("destination_provider").notNull(),
+  sourcePlaylistId: text("source_playlist_id").notNull(),
+  dryRun: boolean("dry_run").notNull(),
+  report: jsonb("report").$type<TransferReport>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});

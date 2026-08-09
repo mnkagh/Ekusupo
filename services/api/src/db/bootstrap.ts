@@ -39,4 +39,19 @@ export async function ensureSchema(db: Database): Promise<void> {
       UNIQUE (user_id, provider)
     )
   `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS transfer_jobs (
+      id TEXT PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      source_provider TEXT NOT NULL,
+      destination_provider TEXT NOT NULL,
+      source_playlist_id TEXT NOT NULL,
+      dry_run BOOLEAN NOT NULL,
+      report JSONB,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    )
+  `);
 }

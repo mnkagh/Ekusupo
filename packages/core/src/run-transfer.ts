@@ -94,6 +94,7 @@ async function failJob(
   job.status = "failed";
   job.updatedAt = updatedAt;
   await jobStore.update(job.id, { status: "failed", updatedAt });
+  report.failureReason = reason;
   report.providerLimitationsEncountered.push(reason);
   return { job, report };
 }
@@ -138,9 +139,20 @@ async function readSourcePlaylist(
   await jobStore.update(job.id, { status: "running", updatedAt: nowIso() });
   job.status = "running";
 
-  const playlist = await getPlaylist(sourceSession, sourcePlaylistId);
-  report.totalItems = playlist.items.length;
-  return { playlist };
+  try {
+    const playlist = await getPlaylist(sourceSession, sourcePlaylistId);
+    report.totalItems = playlist.items.length;
+    return { playlist };
+  } catch (error) {
+    return {
+      failed: await failJob(
+        jobStore,
+        job,
+        report,
+        `Could not read the source playlist: ${describeError(error)}`,
+      ),
+    };
+  }
 }
 
 async function isCancelled(jobStore: TransferJobStore, job: TransferJob): Promise<boolean> {

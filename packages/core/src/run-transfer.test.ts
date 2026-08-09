@@ -414,6 +414,42 @@ describe("runTransfer", () => {
         "Source provider cannot read playlists.",
       ]);
     });
+
+    it("fails cleanly (not an uncaught throw) when the source read itself errors, e.g. a bad playlist ID or a network failure", async () => {
+      const throwingSource: MusicProvider = {
+        manifest: {
+          name: "throwing-source",
+          displayName: "Throwing Source",
+          version: "0.0.0",
+          authenticationMethods: ["none"],
+          supportedCapabilities: new Set(["playlists.read"]),
+        },
+        getCapabilities: () => ({ supports: new Set(["playlists.read"]) }),
+        authenticate: async () => ({ method: "none", raw: {} }),
+        refreshAuthentication: async (session) => session,
+        revokeAuthentication: async () => {},
+        getPlaylist: async () => {
+          throw new Error("playlist not found");
+        },
+      };
+      const destination = makeReadOnlyDestination();
+
+      const { job, report } = await runDryRunTransfer({
+        source: throwingSource,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(job.status).toBe("failed");
+      // Machine-readable, so callers don't have to guess which entry of
+      // the limitations list stopped the run.
+      expect(report.failureReason).toBe("Could not read the source playlist: playlist not found");
+      expect(report.providerLimitationsEncountered).toEqual([
+        "Could not read the source playlist: playlist not found",
+      ]);
+    });
   });
 
   describe("live transfer write-through mode (ADR-0018)", () => {

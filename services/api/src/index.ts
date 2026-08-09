@@ -1,6 +1,5 @@
 import { PostgresSessionStore } from "./auth/postgres-session-store.js";
 import { PostgresUserStore } from "./auth/postgres-user-store.js";
-import { ensureSchema } from "./db/bootstrap.js";
 import { createDb } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import { buildServer } from "./server.js";
@@ -12,14 +11,16 @@ const databasePath = process.env.DATABASE_PATH ?? "./data/ekusupo-db";
 const webAppUrl = process.env.WEB_APP_URL ?? "http://localhost:5173";
 
 async function main(): Promise<void> {
+  // Passed straight into buildServer(), which calls ensureSchema() on
+  // whatever db it's given (own default or this one) — see ADR-0027.
   const db = createDb(databasePath);
-  await ensureSchema(db);
 
   const app = await buildServer({
     corsOrigin: webAppUrl,
     userStore: new PostgresUserStore(db),
     sessionStore: new PostgresSessionStore(db),
     providerConnectionStore: new PostgresProviderConnectionStore(db),
+    db,
     providerRoutesConfig: {
       spotifyClientId: process.env.SPOTIFY_CLIENT_ID,
       spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET,

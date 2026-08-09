@@ -3,15 +3,20 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 
-import { InMemorySessionStore } from "./auth/session-store.js";
+import { PostgresSessionStore } from "./auth/postgres-session-store.js";
+import { PostgresUserStore } from "./auth/postgres-user-store.js";
 import type { SessionStore } from "./auth/session-store.js";
-import { InMemoryUserStore } from "./auth/user-store.js";
 import type { UserStore } from "./auth/user-store.js";
-import { InMemoryProviderConnectionStore } from "./providers/provider-connection-store.js";
+import { ensureSchema } from "./db/bootstrap.js";
+import { createDb } from "./db/client.js";
+import type { Database } from "./db/client.js";
+import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import type { ProviderConnectionStore } from "./providers/provider-connection-store.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import type { ProviderRoutesConfig, ProviderRoutesDeps } from "./routes/provider-routes.js";
 import { registerProviderRoutes } from "./routes/provider-routes.js";
+import { registerTransferRoutes } from "./routes/transfer-routes.js";
+import type { TransferRoutesDeps } from "./routes/transfer-routes.js";
 
 export interface BuildServerOptions {
   corsOrigin?: string;
@@ -20,6 +25,13 @@ export interface BuildServerOptions {
   providerConnectionStore?: ProviderConnectionStore;
   providerRoutesConfig?: ProviderRoutesConfig;
   createSpotifyProviderImpl?: ProviderRoutesDeps["createSpotifyProviderImpl"];
+  /**
+   * Backs every store below, not just `transfer_jobs` (ADR-0027).
+   * Defaults to a fresh in-memory `pglite` instance — real Postgres,
+   * just ephemeral, so tests that pass no `db` still get real SQL.
+   */
+  db?: Database;
+  createTransferSpotifyProviderImpl?: TransferRoutesDeps["createSpotifyProviderImpl"];
 }
 
 /**
@@ -41,17 +53,36 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   app.get("/health", async () => ({ status: "ok" }));
 
+  // One `db` backs every default store, so they all share one storage
+  // world. This matters: `transfer_jobs.user_id` and
+  // `provider_connections.user_id` are real foreign keys to `users.id`
+  // (schema.ts), so a user held only in a `Map` while jobs are written
+  // to Postgres would violate them on insert. The in-memory stores
+  // ADR-0022 introduced predate this `db` existing and remain available
+  // by injection, but are no longer the default.
+  const db = options.db ?? createDb();
+  await ensureSchema(db);
+
   const authService = registerAuthRoutes(app, {
-    userStore: options.userStore ?? new InMemoryUserStore(),
-    sessionStore: options.sessionStore ?? new InMemorySessionStore(),
+    userStore: options.userStore ?? new PostgresUserStore(db),
+    sessionStore: options.sessionStore ?? new PostgresSessionStore(db),
   });
+
+  const providerConnectionStore =
+    options.providerConnectionStore ?? new PostgresProviderConnectionStore(db);
 
   registerProviderRoutes(app, {
     authService,
-    providerConnectionStore:
-      options.providerConnectionStore ?? new InMemoryProviderConnectionStore(),
+    providerConnectionStore,
     config: options.providerRoutesConfig,
     createSpotifyProviderImpl: options.createSpotifyProviderImpl,
+  });
+
+  registerTransferRoutes(app, {
+    authService,
+    providerConnectionStore,
+    db,
+    createSpotifyProviderImpl: options.createTransferSpotifyProviderImpl,
   });
 
   return app;

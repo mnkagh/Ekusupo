@@ -58,7 +58,7 @@ export async function runDryRunTransferForResource(
   }
 
   try {
-    const { report } = await runDryRunTransfer({
+    const { job, report } = await runDryRunTransfer({
       source: provider,
       sourceSession: session,
       destination: provider,
@@ -66,6 +66,15 @@ export async function runDryRunTransferForResource(
       sourcePlaylistId: resource.resourceId,
       options: { onProgress: deps.onProgress },
     });
+    // The engine reports a stopped run as a `failed` job rather than
+    // throwing, so the status has to be checked explicitly — the `catch`
+    // below never sees it. Without this, a run that never read the
+    // source would surface to the user as a completed transfer whose
+    // counters happen to be zero.
+    if (job.status === "failed") {
+      deps.onFailed(report.failureReason ?? "The transfer could not be completed.");
+      return;
+    }
     deps.onCompleted(report);
   } catch (error) {
     deps.onFailed(error instanceof Error ? error.message : "Unknown transfer error.");

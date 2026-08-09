@@ -215,7 +215,19 @@ otherwise) and all scoped to the calling user — see ADR-0027.
 | `GET /transfers`          | The caller's jobs, newest first, each with its stored report.                                                                             |
 | `GET /transfers/:id`      | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable.                             |
 
-Source and destination are both the caller's connected Spotify account;
+### Who needs to connect an account
+
+A connected Spotify account is used when there is one. When there isn't,
+the server falls back to an app-level token and reads **public playlists
+anonymously** — no login, no connection (ADR-0028). The response says
+which was used via `usedConnectedAccount`.
+
+The server still needs its own Spotify client ID and secret for either
+path; Spotify has no unauthenticated API. What the anonymous path
+removes is the _end user's_ involvement, not the credential. Writing to
+a destination will always require a connected account.
+
+Source and destination are both Spotify;
 there is no destination selection yet. Because Spotify is read-only
 (no `tracks.search`), such a run legitimately plans but never matches —
 expect `status: "partial"` with every track skipped and the limitation

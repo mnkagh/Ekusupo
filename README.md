@@ -140,6 +140,10 @@ Start with:
 
 - [Engineering Constitution](./CLAUDE.md)
 - [Vision](./docs/vision.md)
+- [Development Setup](./docs/development-setup.md) — install and repo scripts
+- [Running and Testing Locally](./docs/running-and-testing.md) — how to run
+  what exists today, what works without any external accounts, and what
+  needs your own Spotify credentials
 
 Planned documentation:
 

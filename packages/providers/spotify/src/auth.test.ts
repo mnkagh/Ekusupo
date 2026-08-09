@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authenticate, refreshAuthentication } from "./auth.js";
+import { authenticate, authenticateAsApp, refreshAuthentication } from "./auth.js";
 import type { SpotifyTokenResponse } from "./types.js";
 
 const tokenFixture: SpotifyTokenResponse = {
@@ -45,6 +45,37 @@ describe("authenticate — confidential client (clientSecret configured)", () =>
     expect(calls[0]?.body.get("client_id")).toBeNull();
     expect(calls[0]?.body.get("code_verifier")).toBeNull();
     expect(calls[0]?.body.get("code")).toBe("auth-code");
+  });
+});
+
+describe("authenticateAsApp — Client Credentials, no user involved", () => {
+  it("asks for the client_credentials grant with Basic auth and no user code", async () => {
+    const { fetchImpl, calls } = capturingFetch();
+
+    await authenticateAsApp({ clientId: "id", clientSecret: "secret", fetchImpl });
+
+    expect(calls[0]?.body.get("grant_type")).toBe("client_credentials");
+    expect(calls[0]?.headers.get("Authorization")).toBe(`Basic ${btoa("id:secret")}`);
+    // No authorization code and no redirect: there is no user in this flow.
+    expect(calls[0]?.body.get("code")).toBeNull();
+    expect(calls[0]?.body.get("redirect_uri")).toBeNull();
+  });
+
+  it("marks the session appOnly, so a caller can explain a private-playlist failure correctly", async () => {
+    const { fetchImpl } = capturingFetch();
+
+    const session = await authenticateAsApp({ clientId: "id", clientSecret: "secret", fetchImpl });
+
+    expect(session.raw.appOnly).toBe(true);
+    expect(session.raw.accessToken).toBe("mock-access-token");
+  });
+
+  it("refuses without a client secret — the grant is for confidential clients only", async () => {
+    const { fetchImpl } = capturingFetch();
+
+    await expect(authenticateAsApp({ clientId: "id", fetchImpl })).rejects.toThrow(
+      /clientId and a clientSecret/,
+    );
   });
 });
 

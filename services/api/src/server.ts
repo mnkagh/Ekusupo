@@ -34,6 +34,7 @@ export interface BuildServerOptions {
    */
   db?: Database;
   createTransferSpotifyProviderImpl?: TransferRoutesDeps["createSpotifyProviderImpl"];
+  createSpotifyAppSessionImpl?: TransferRoutesDeps["createSpotifyAppSessionImpl"];
 }
 
 /**
@@ -85,6 +86,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     providerConnectionStore,
     db,
     createSpotifyProviderImpl: options.createTransferSpotifyProviderImpl,
+    // Same credentials the OAuth routes use — they also authorize the
+    // app-level token that reads public playlists with nobody connected.
+    spotifyClientId: options.providerRoutesConfig?.spotifyClientId,
+    spotifyClientSecret: options.providerRoutesConfig?.spotifyClientSecret,
+    createSpotifyAppSessionImpl: options.createSpotifyAppSessionImpl,
   });
 
   return app;

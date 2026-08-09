@@ -234,6 +234,117 @@ describe("POST /transfers/dry-run", () => {
   });
 });
 
+describe("POST /transfers/dry-run — public playlists without connecting", () => {
+  /** An app-level token: reads `public-1`, refuses anything else the way Spotify refuses a private playlist. */
+  function fakeAppSpotify(): typeof import("@ekusupo/provider-spotify").createSpotifyProvider {
+    return () =>
+      ({
+        manifest: {
+          name: "spotify",
+          displayName: "Spotify",
+          version: "0.0.0",
+          authenticationMethods: ["oauth2"],
+          supportedCapabilities: new Set(["profile.read", "playlists.read"]),
+        },
+        getCapabilities: () => ({ supports: new Set(["profile.read", "playlists.read"]) }),
+        authenticate: async () =>
+          ({ method: "oauth2", raw: { accessToken: "app-token" } }) as AuthSession,
+        refreshAuthentication: async (s) => s,
+        revokeAuthentication: async () => {},
+        getPlaylist: async (_session, playlistId: string) => {
+          if (playlistId !== "public-1") throw new Error("404 not found");
+          return { ...fakePlaylist, id: "public-1" };
+        },
+      }) as MusicProvider;
+  }
+
+  const appSessionImpl = async () =>
+    ({ method: "oauth2", raw: { accessToken: "app-token", appOnly: true } }) as AuthSession;
+
+  it("transfers a public playlist with no Spotify account connected", async () => {
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createTransferSpotifyProviderImpl: fakeAppSpotify(),
+      createSpotifyAppSessionImpl: appSessionImpl,
+    });
+    const sessionCookie = await signUpAndGetCookie();
+
+    // Note: no connectSpotify() call anywhere in this test.
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/dry-run",
+      payload: { sourcePlaylistId: "public-1" },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.usedConnectedAccount).toBe(false);
+    expect(body.report.totalItems).toBe(1);
+  });
+
+  it("tells the user to connect when the playlist isn't public", async () => {
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createTransferSpotifyProviderImpl: fakeAppSpotify(),
+      createSpotifyAppSessionImpl: appSessionImpl,
+    });
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/dry-run",
+      payload: { sourcePlaylistId: "someones-private-playlist" },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.job.status).toBe("failed");
+    // The actionable half matters more than the technical reason: an
+    // anonymous token cannot tell "private" from "missing", so the
+    // message must not assert a wrong cause.
+    expect(body.report.userActionsRequired).toContainEqual(
+      expect.stringContaining("Connect your Spotify account"),
+    );
+  });
+
+  it("prefers a connected account over the anonymous token", async () => {
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+      createTransferSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+      createSpotifyAppSessionImpl: appSessionImpl,
+    });
+    const sessionCookie = await signUpAndGetCookie();
+    await connectSpotify(sessionCookie);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/dry-run",
+      payload: { sourcePlaylistId: "playlist-1" },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.json().usedConnectedAccount).toBe(true);
+  });
+
+  it("still refuses when the server has no Spotify credentials at all", async () => {
+    app = await buildServer({ createSpotifyAppSessionImpl: appSessionImpl });
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/dry-run",
+      payload: { sourcePlaylistId: "public-1" },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain("Connect Spotify");
+  });
+});
+
 describe("GET /transfers and GET /transfers/:id", () => {
   it("both require authentication", async () => {
     app = await buildServer();

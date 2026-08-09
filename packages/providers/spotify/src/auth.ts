@@ -102,6 +102,40 @@ export async function authenticate(
   return exchangeToken(config, body);
 }
 
+/**
+ * The Client Credentials grant: an *app-level* token, with no user and
+ * no login. It can read public catalog data — a public playlist, an
+ * album, a track — and nothing belonging to any particular listener.
+ *
+ * This is what makes "paste a public playlist link" work without asking
+ * anyone to connect an account. It is still an authenticated call:
+ * Spotify has no anonymous API, so the server must hold a client ID and
+ * secret. What disappears is the *user's* involvement, not the
+ * credential.
+ *
+ * Confidential clients only — the grant requires a `clientSecret`, so a
+ * browser extension (ADR-0019's public client) cannot use it.
+ *
+ * The returned session carries `appOnly: true` so callers can tell it
+ * apart from a user session and explain a failure correctly: a private
+ * playlist read with this token is not "not found", it is "you need to
+ * connect your account".
+ */
+export async function authenticateAsApp(config: SpotifyAuthConfig): Promise<AuthSession> {
+  if (!config.clientId || !config.clientSecret) {
+    throw new ConnectorError(
+      "validation_error",
+      "The Client Credentials grant needs both a clientId and a clientSecret.",
+    );
+  }
+
+  const session = await exchangeToken(
+    config,
+    new URLSearchParams({ grant_type: "client_credentials" }),
+  );
+  return { ...session, raw: { ...session.raw, appOnly: true } };
+}
+
 export async function refreshAuthentication(
   config: SpotifyAuthConfig,
   session: AuthSession,

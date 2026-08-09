@@ -209,11 +209,11 @@ field.
 Three routes, all requiring an authenticated session cookie (401
 otherwise) and all scoped to the calling user — see ADR-0027.
 
-| Route                    | Behavior                                                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Route                     | Behavior                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /transfers/dry-run` | Body `{ sourcePlaylistId }`. Runs `runDryRunTransfer` and returns `{ job, report }`. 400 if the id is missing or Spotify isn't connected. |
-| `GET /transfers`         | The caller's jobs, newest first, each with its stored report.                                               |
-| `GET /transfers/:id`     | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable. |
+| `GET /transfers`          | The caller's jobs, newest first, each with its stored report.                                                                             |
+| `GET /transfers/:id`      | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable.                             |
 
 Source and destination are both the caller's connected Spotify account;
 there is no destination selection yet. Because Spotify is read-only

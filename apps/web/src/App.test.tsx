@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App.js";
@@ -32,17 +32,59 @@ function stubMe(result: { user: unknown } | { error: string; status: number }) {
 }
 
 describe("App", () => {
-  it("renders the Ekusupo heading", () => {
+  it("renders the Ekusupo heading once the session check resolves", async () => {
     stubMe({ error: "not_authenticated", status: 401 });
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Ekusupo" })).toBeDefined();
+
+    // Async because the heading lives in the view chosen by the session
+    // check — while that is in flight the shell shows only a loading
+    // state, so a synchronous query races it.
+    expect(await screen.findByRole("heading", { name: "Ekusupo" })).toBeDefined();
   });
 
-  it("shows the sign-in form when not authenticated", async () => {
+  it("offers both entry points instead of showing a form by default", async () => {
     stubMe({ error: "not_authenticated", status: 401 });
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeDefined();
+    await screen.findByRole("button", { name: "Create account" });
+    const landing = within(document.querySelector(".landing") as HTMLElement);
+    expect(landing.getByRole("button", { name: "Create account" })).toBeDefined();
+    expect(landing.getByRole("button", { name: "Sign in" })).toBeDefined();
+    // The drawer stays mounted so it can animate, but must be inert
+    // and out of the accessibility tree until it is opened.
+    expect(document.querySelector(".drawer--open")).toBeNull();
+    expect(document.querySelector(".drawer__panel")?.hasAttribute("inert")).toBe(true);
+  });
+
+  it("opens the auth drawer on the side when an entry point is clicked", async () => {
+    stubMe({ error: "not_authenticated", status: 401 });
+    render(<App />);
+
+    // Scoped to the landing: the drawer's own submit button is also
+    // called "Sign in", so an unscoped query is ambiguous by design.
+    await screen.findByRole("button", { name: "Create account" });
+    const landing = within(document.querySelector(".landing") as HTMLElement);
+    fireEvent.click(landing.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByRole("dialog", { name: "Account" })).toBeDefined();
+    expect(document.querySelector(".drawer--open")).not.toBeNull();
+    // "Create account" must open on the sign-up side, not on sign-in.
+    expect(screen.getByRole("heading", { name: "Create an account" })).toBeDefined();
+  });
+
+  it("closes the drawer on Escape", async () => {
+    stubMe({ error: "not_authenticated", status: 401 });
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Create account" });
+    const landing = within(document.querySelector(".landing") as HTMLElement);
+    fireEvent.click(landing.getByRole("button", { name: "Sign in" }));
+    expect(document.querySelector(".drawer--open")).not.toBeNull();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+    expect(document.querySelector(".drawer--open")).toBeNull();
   });
 
   it("shows the signed-in user and a sign-out button when authenticated", async () => {

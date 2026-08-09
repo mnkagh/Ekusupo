@@ -1,0 +1,1893 @@
+@import "./tokens.css";
+
+/* ---------------------------------------------------------------- reset */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  letter-spacing: var(--track-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Never removed, only restyled — keyboard users get a better ring than
+   the default rather than none (CLAUDE.md §20.3). */
+:focus-visible {
+  outline: 2px solid var(--spectrum-1);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--spectrum-2);
+  color: var(--text-primary);
+}
+
+/* Utility: spectrum-filled text. Falls back to solid colour where
+   background-clip:text is unsupported, rather than to invisible text. */
+.spectrum-text {
+  color: var(--spectrum-2);
+  background: var(--spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .spectrum-text {
+    color: transparent;
+  }
+}
+
+/* ----------------------------------------------------------- backdrop */
+
+.core-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  /* Stands in whenever WebGL is unavailable or the shader fails to
+     compile — a complete composition, not a blank fallback. */
+  background:
+    radial-gradient(ellipse 70% 55% at 60% 40%, rgb(139 108 245 / 16%), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 15% 75%, rgb(52 224 208 / 10%), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 85% 80%, rgb(255 178 107 / 8%), transparent 70%),
+    var(--surface-void);
+}
+
+.core-field__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.core-field__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 50%, transparent 25%, rgb(10 8 18 / 60%) 100%),
+    linear-gradient(180deg, rgb(10 8 18 / 60%) 0%, transparent 22%, rgb(10 8 18 / 82%) 100%);
+}
+
+/* ------------------------------------------------------ intro screen */
+
+/*
+ * A full opaque splash, above everything, that plays once and then opens
+ * like a curtain. Solid rather than translucent on purpose: while it is
+ * up, nothing behind it should be visible mid-assembly.
+ */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* The two solid halves. Each covers exactly half the viewport, so
+   together they hide the app completely. */
+.intro__curtain {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%; /* slight overlap so no hairline gap shows at the seam */
+  background: var(--surface-void);
+  transition: transform var(--dur-slow) var(--ease-in-out);
+}
+
+.intro__curtain--top {
+  top: 0;
+  /* A faint spectrum wash so the solid field isn't dead flat. */
+  background-image: radial-gradient(
+    ellipse 60% 90% at 50% 100%,
+    rgb(139 108 245 / 12%),
+    transparent 70%
+  );
+}
+
+.intro__curtain--bottom {
+  bottom: 0;
+  background-image: radial-gradient(
+    ellipse 60% 90% at 50% 0%,
+    rgb(52 224 208 / 10%),
+    transparent 70%
+  );
+}
+
+/* A dichroic line on the parting seam, which brightens as it opens. */
+.intro__seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--spectrum);
+  opacity: 0.5;
+  transform: scaleX(0.2);
+  animation: seam-widen 1.2s var(--ease-out) 0.2s both;
+}
+
+@keyframes seam-widen {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.intro__word {
+  position: relative;
+  display: flex;
+  gap: clamp(0.1rem, 0.6vw, 0.5rem);
+  transition:
+    opacity 420ms var(--ease-out),
+    transform 420ms var(--ease-out),
+    filter 420ms var(--ease-out);
+}
+
+/* --- the exit --- */
+
+.intro--exiting .intro__curtain--top {
+  transform: translateY(-100%);
+}
+
+.intro--exiting .intro__curtain--bottom {
+  transform: translateY(100%);
+}
+
+.intro--exiting .intro__seam {
+  opacity: 0;
+  transition: opacity 300ms var(--ease-out);
+}
+
+/* The word leaves first, so the curtains open on an empty field. */
+.intro--exiting .intro__word {
+  opacity: 0;
+  transform: scale(1.08);
+  filter: blur(10px);
+}
+
+.intro__letter {
+  display: block;
+  font-family: var(--font-display);
+  /* Smaller than the landing wordmark: the splash has the whole screen
+     to itself, so it does not need to fill it to read. */
+  font-size: clamp(2.25rem, 9vw, 7rem);
+  line-height: 0.8;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+
+  /* Full strength: this is the splash's whole subject, on an opaque
+     field, so there is nothing behind it to stay out of the way of. */
+  color: transparent;
+  background: var(--spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-size: 320% 100%;
+
+  will-change: transform, opacity;
+  animation:
+    letter-in 900ms var(--ease-out) both,
+    sweep-spectrum 6s linear infinite;
+  /* Entrance stagger matches the decode's own 190ms cadence. */
+  animation-delay: calc(var(--i) * 190ms), calc(var(--i) * -0.8s);
+}
+
+/* The moment a letter resolves out of the scramble. */
+.intro__letter.is-locking {
+  animation:
+    letter-lock 460ms var(--ease-out),
+    sweep-spectrum 6s linear infinite;
+}
+
+@keyframes letter-in {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) rotateX(62deg) scale(1.15);
+    filter: blur(16px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes letter-lock {
+  0% {
+    opacity: 0.55;
+    filter: brightness(2.4);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* The dichroic highlight travelling the word. */
+@keyframes sweep-spectrum {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 320% 50%;
+  }
+}
+
+@keyframes letter-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -10px;
+  }
+}
+
+/* -------------------------------------------------------------- shell */
+
+.shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* Half the drawer's width, so the centred content ends up centred in
+   what is left of the viewport rather than hidden behind the panel. */
+@media (min-width: 40rem) {
+  .shell--shifted {
+    transform: translateX(min(-15rem, -8vw));
+  }
+}
+
+/* Identity and session sit in a rail beside the content rather than in
+   a bar above it — the providers panel is the page's subject, and a
+   full-width header pushes it down for no benefit. */
+.shell__inner {
+  width: 100%;
+  max-width: 92rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6) var(--space-7) var(--space-5);
+  flex: 1;
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  gap: 0 var(--space-7);
+}
+
+@media (max-width: 64rem) {
+  .shell__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    padding: var(--space-4) var(--space-4) var(--space-6);
+  }
+}
+
+/* ---------------------------------------------------------------- rail */
+
+.wordmark__description {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 24ch;
+}
+
+.shell__inner--full {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: none;
+  padding-inline: var(--space-6);
+  place-items: center;
+}
+
+.shell__inner--full .content {
+  grid-column: 1;
+}
+
+.rail {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-2);
+  padding-right: var(--space-5);
+  border-right: 1px solid var(--line-faint);
+}
+
+@media (max-width: 64rem) {
+  .wordmark__description {
+    display: none;
+  }
+
+  .rail {
+    grid-row: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-right: none;
+    border-bottom: 1px solid var(--line-faint);
+    padding-right: 0;
+    padding-bottom: var(--space-4);
+  }
+}
+
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * Spectrum-filled and slowly sweeping, matching the landing wordmark —
+ * the mark should look like itself wherever it appears, rather than
+ * being a styled headline on one screen and plain text on the other.
+ */
+.wordmark__text {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  margin: 0;
+
+  color: transparent;
+  background: var(--spectrum);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: sweep-spectrum 12s linear infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.78);
+  }
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+@media (max-width: 64rem) {
+  .session {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.session__identity {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  word-break: break-all;
+}
+
+/* --------------------------------------------------------------- type */
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-normal);
+  color: var(--text-muted);
+}
+
+.eyebrow--signal {
+  color: var(--spectrum-1);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6.5vw, var(--text-3xl));
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: var(--track-tight);
+}
+
+.display em {
+  font-style: italic;
+}
+
+.lede {
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  max-width: 42ch;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--track-normal);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- main */
+
+.content {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* Signed in, the providers panel is the whole point of the view, so it
+   starts at the top and grows rather than floating centred. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 64rem) {
+  .content {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+  gap: var(--space-8);
+  align-items: center;
+  padding: var(--space-7) 0;
+}
+
+@media (max-width: 72rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-5) 0;
+  }
+}
+
+.hero__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* The vision diagram as an element, not a sentence describing one. */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+}
+
+.flow__node {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgb(23 18 37 / 70%);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+
+.flow__node:hover {
+  border-color: var(--line-strong);
+  color: var(--text-secondary);
+}
+
+.flow__node--core {
+  border-color: rgb(139 108 245 / 50%);
+  color: var(--text-primary);
+  box-shadow: 0 0 28px -10px var(--glow-violet);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Signal passing through the core, continuously. */
+.flow__node--core::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(52 224 208 / 28%) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: signal-pass 3.6s var(--ease-in-out) infinite;
+}
+
+@keyframes signal-pass {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.flow__arrow {
+  color: var(--line-strong);
+}
+
+/* -------------------------------------------------------------- panel */
+
+.panel {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius-lg);
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+.panel:hover {
+  border-color: var(--line);
+}
+
+/* A dichroic hairline along the top edge — the one place the full
+   spectrum appears as itself. */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  border-radius: inherit;
+  background: var(--spectrum);
+  opacity: 0.55;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.panel:hover::after {
+  opacity: 1;
+}
+
+/* Specular sheen tracking the cursor, fed by useTilt's custom properties
+   so light and tilt share one origin. */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 420px at var(--tilt-x, 50%) var(--tilt-y, 50%),
+    rgb(139 108 245 / 12%),
+    rgb(52 224 208 / 5%) 40%,
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+  pointer-events: none;
+}
+
+.panel:hover::before {
+  opacity: 1;
+}
+
+.panel__header {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--line-faint);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.panel__body {
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-5);
+}
+
+/* -------------------------------------------------------------- forms */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.field__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.field:focus-within .field__label {
+  color: var(--spectrum-1);
+}
+
+.field__input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-void);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.field__input::placeholder {
+  color: var(--text-muted);
+}
+
+.field__input:hover {
+  border-color: var(--line-strong);
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: var(--spectrum-1);
+  background: var(--surface-base);
+  box-shadow: 0 0 0 3px rgb(52 224 208 / 12%);
+}
+
+/* ------------------------------------------------------------ buttons */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-normal);
+  cursor: pointer;
+  overflow: hidden;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.btn:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  width: 100%;
+  background: var(--spectrum);
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+  color: var(--text-inverse);
+  font-weight: 700;
+  transition:
+    background-position var(--dur-slow) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* The spectrum slides rather than the button changing colour — the
+   gradient itself is the interaction. */
+.btn--primary:hover:not(:disabled) {
+  background-position: 100% 50%;
+  box-shadow: 0 0 36px -10px var(--glow-violet);
+}
+
+.btn--primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 40%) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.btn--primary:hover:not(:disabled)::after {
+  transform: translateX(120%);
+}
+
+.btn--ghost {
+  background: rgb(255 255 255 / 6%);
+  border-color: var(--line-strong);
+  color: var(--text-primary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 12%);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.btn--link {
+  padding: var(--space-2) 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+.btn--link:hover:not(:disabled) {
+  color: var(--spectrum-1);
+}
+
+.btn--connect {
+  background: var(--text-primary);
+  border-color: transparent;
+  color: var(--text-inverse);
+  font-weight: 600;
+  padding-inline: var(--space-6);
+}
+
+.btn--connect:hover:not(:disabled) {
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -10px rgb(255 255 255 / 35%);
+}
+
+/*
+ * A scan line crossing the button on hover — the connect action is the
+ * one thing on this screen that actually establishes a link, so it gets
+ * the most deliberate motion. Runs once per hover rather than looping:
+ * a permanently animating control reads as a loading state.
+ */
+.btn--connect::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--spectrum-1) 55%, transparent) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  transition: transform var(--dur-slow) var(--ease-out);
+  pointer-events: none;
+}
+
+.btn--connect:hover:not(:disabled)::before {
+  transform: translateX(100%);
+}
+
+/* An arrow that emerges on approach, so the control states its
+   direction rather than only its label. */
+.btn--connect::after {
+  content: "→";
+  display: inline-block;
+  width: 0;
+  opacity: 0;
+  margin-left: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-spring),
+    width var(--dur) var(--ease-out),
+    margin-left var(--dur) var(--ease-out);
+}
+
+.btn--connect:hover:not(:disabled)::after {
+  opacity: 1;
+  width: 1ch;
+  margin-left: var(--space-2);
+  transform: translateX(0);
+}
+
+/* Disconnecting: the tile visibly unlinks rather than just greying out —
+   the edge drains from the accent back to inert while the request is in
+   flight, so the state change is legible before the refetch lands. */
+.btn--ghost:disabled {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn--ghost:disabled::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--spectrum);
+  transform-origin: right;
+  animation: drain 900ms var(--ease-in-out) infinite;
+}
+
+@keyframes drain {
+  0% {
+    transform: scaleX(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scaleX(0);
+    opacity: 0.2;
+  }
+}
+
+/* A connected provider's glyph frame breathes — a slow, low-contrast
+   pulse that reads as "live" from across the grid without competing
+   with the text beside it. */
+.tile--live .tile__glyph {
+  animation: frame-breathe 3.6s var(--ease-in-out) infinite;
+}
+
+@keyframes frame-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(244 239 230 / 22%);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgb(244 239 230 / 0%);
+  }
+}
+
+/* -------------------------------------------------------------- lists */
+
+.provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.provider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-base);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+
+.provider:hover {
+  border-color: var(--line);
+  background: var(--surface-panel);
+  transform: translateX(3px);
+}
+
+.provider__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.provider__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Small enough to sit inside a row without turning it into a card. */
+.provider__glyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  background: var(--surface-void);
+  transition:
+    color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+
+.provider--live .provider__glyph {
+  color: var(--accent-1);
+  border-color: color-mix(in srgb, var(--accent-1) 45%, transparent);
+}
+
+.provider:hover .provider__glyph {
+  color: var(--accent-1);
+}
+
+/* Planned providers stay legible but visibly inert — no accent on
+   hover, and no action that would fail if clicked. */
+.provider--planned {
+  opacity: 0.62;
+}
+
+.provider--planned:hover {
+  border-color: var(--line-faint);
+  background: var(--surface-base);
+}
+
+.provider__pending {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--text-muted);
+}
+
+.provider__name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: var(--track-normal);
+}
+
+.provider__meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+/* Dot plus label — never colour alone, so the meaning survives for
+   anyone who can't separate the hues. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-normal);
+  color: var(--text-secondary);
+}
+
+.status__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-muted);
+}
+
+.status--live {
+  color: var(--spectrum-1);
+}
+
+.status--live .status__dot {
+  background: var(--spectrum-1);
+  box-shadow: 0 0 10px var(--spectrum-1);
+  animation: pulse 2.4s var(--ease-in-out) infinite;
+}
+
+.status--idle {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ notices */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-panel);
+  font-size: var(--text-sm);
+  animation: notice-in var(--dur) var(--ease-out) both;
+}
+
+.notice::before {
+  content: "";
+  width: 2px;
+  align-self: stretch;
+  border-radius: 1px;
+  background: var(--text-muted);
+  flex: none;
+}
+
+.notice--ok {
+  border-color: rgb(52 224 208 / 30%);
+}
+
+.notice--ok::before {
+  background: var(--spectrum-1);
+}
+
+.notice--error {
+  border-color: rgb(255 122 138 / 32%);
+  background: var(--danger-faint);
+  color: var(--danger);
+}
+
+.notice--error::before {
+  background: var(--danger);
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------- states */
+
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--text-muted);
+}
+
+.loading__bar {
+  position: relative;
+  width: 72px;
+  height: 1px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.loading__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--spectrum);
+  transform: translateX(-100%);
+  animation: sweep 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ------------------------------------------------------------ landing */
+
+/*
+ * One column, left-aligned, with the form deliberately absent — it
+ * arrives in a drawer on request. A landing page carrying a permanent
+ * sign-in card next to the headline is the layout every template ships
+ * with, and it splits attention between "what is this" and "log in"
+ * before the first question is answered.
+ */
+.landing {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+  padding: var(--space-8) 0;
+  max-width: 54rem;
+}
+
+.landing__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+/* The primary button is full-width inside the drawer, but must size to
+   its content out here. */
+.btn--auto {
+  width: auto;
+}
+
+/* -------------------------------------------- landing: immersive */
+
+/*
+ * One circle of colour behind the whole landing column: big enough that
+ * the wordmark sits inside it and its lower edge reaches past the sign
+ * in button, so the letters and the actions stand in the same light
+ * rather than the buttons falling outside it into the dark.
+ *
+ * Conic rather than linear — the hues wrap around a centre and turn with
+ * it, which is what makes it read as a circle of colour instead of a
+ * band that happens to be clipped round.
+ */
+.immersive::before {
+  content: "";
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  /* Wide enough that the wordmark sits inside it and the lower edge
+     clears the sign in button, so the type and the actions stand in one
+     field of light. */
+  width: min(150vh, 88rem);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  z-index: -2;
+  border-radius: 50%;
+
+  background: conic-gradient(
+    from 0deg,
+    var(--spectrum-1),
+    var(--spectrum-2),
+    var(--spectrum-3),
+    var(--spectrum-2),
+    var(--spectrum-1)
+  );
+  /* Spread wide but pulled back in gain — the colour should fill the
+     space around the type, not compete with it for attention. */
+  filter: blur(96px) saturate(1.5) brightness(0.95);
+  opacity: 0.38;
+  pointer-events: none;
+
+  /* Held at full strength well past the letters so the colour still has
+     weight down at the buttons, then dropped to nothing by the rim. */
+  mask-image: radial-gradient(closest-side, #000 52%, rgb(0 0 0 / 55%) 78%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 52%,
+    rgb(0 0 0 / 55%) 78%,
+    transparent 100%
+  );
+
+  animation: aura-turn 22s linear infinite;
+}
+
+@keyframes aura-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.immersive {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  text-align: center;
+  width: 100%;
+  min-height: 60vh;
+  padding: var(--space-7) 0;
+  perspective: 1000px;
+}
+
+/* Holds the word and the colour orbiting it in one stacking context, so
+   the aura is clipped to the name rather than washing the whole page. */
+.immersive__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+/* Counter-rotating and offset, so the two never line up into a single
+   static ring. */
+.immersive__tagline {
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  color: var(--text-primary);
+  text-shadow: 0 1px 12px rgb(10 8 18 / 85%);
+  max-width: 44ch;
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: 700ms;
+}
+
+.immersive__word {
+  display: flex;
+  gap: clamp(0.1rem, 0.8vw, 0.6rem);
+  margin: 0;
+  transform-style: preserve-3d;
+}
+
+.immersive__word span {
+  position: relative;
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 12vw, 9rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+
+  /* Solid white base. The colour is painted over it by the overlay
+     below rather than replacing it, so the letters stay white and the
+     spectrum reads as light moving through them. */
+  color: var(--text-primary);
+
+  /*
+   * Extrusion. Stacked offsets in the direction the letter is leaning
+   * (--lean-x / --lean-y, written by the parallax loop) give each glyph
+   * a side wall, so the word turns like a solid rather than sliding as a
+   * flat plane.
+   */
+  text-shadow:
+    calc(var(--lean-x, 0) * 1px) calc(var(--lean-y, 0) * 1px) 0 rgb(120 108 150 / 45%),
+    calc(var(--lean-x, 0) * 3px) calc(var(--lean-y, 0) * 3px) 0 rgb(76 68 98 / 35%),
+    calc(var(--lean-x, 0) * 6px) calc(var(--lean-y, 0) * 6px) 20px rgb(10 8 18 / 65%);
+
+  will-change: transform;
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i) * 80ms);
+}
+
+/*
+ * The colour lives *around* the letters, never in them: a copy of each
+ * glyph filled with the spectrum, blurred, and sitting behind the solid
+ * white one. Because it is the same shape rather than a circle, the
+ * colour hugs each letter's contours and spills out around the strokes.
+ *
+ * The gradient sweeps and each letter is offset from the last, so the
+ * colour travels around the outside of the word.
+ */
+.immersive__word span::before {
+  content: attr(data-char);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+
+  color: transparent;
+  background: var(--spectrum);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  /* Saturated well past the UI palette — at this blur radius an
+     unboosted gradient averages into grey. */
+  filter: blur(26px) saturate(1.9) brightness(1.4);
+  transform: scale(1.22);
+
+  animation: sweep-spectrum 6s linear infinite;
+  animation-delay: calc(var(--i) * -0.8s);
+}
+
+/*
+ * The halo: a second copy of each letter, spectrum-filled and blurred,
+ * behind the solid one. Because it is the same glyph rather than a
+ * circle, the colour spills out around the strokes and follows each
+ * letter's contours.
+ *
+ * Saturated and boosted past the UI palette on purpose — this is the one
+ * place in the app allowed to be loud, and at this blur radius an
+ * unboosted gradient turns to grey mush.
+ */
+.immersive__word span::before {
+  content: attr(data-char);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+
+  color: transparent;
+  background: var(--spectrum);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  filter: blur(30px) saturate(1.8) brightness(1.35);
+  transform: scale(1.3);
+  opacity: 1;
+  pointer-events: none;
+
+  animation: sweep-spectrum 7s linear infinite;
+  animation-delay: calc(var(--i) * -0.8s);
+}
+
+.immersive__lede {
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: 700ms;
+}
+
+.immersive__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: 820ms;
+}
+
+/* A single deliberate entry point, framed rather than filled. */
+.btn--enter {
+  padding: var(--space-3) var(--space-8);
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.btn--enter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--spectrum);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.btn--enter span {
+  position: relative;
+  z-index: 1;
+  transition: color var(--dur) var(--ease-out);
+}
+
+.btn--enter:hover {
+  border-color: transparent;
+}
+
+.btn--enter:hover::after {
+  opacity: 1;
+}
+
+.btn--enter:hover span {
+  color: var(--text-inverse);
+}
+
+/* ------------------------------------------------------------- drawer */
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.drawer--open {
+  pointer-events: auto;
+}
+
+.drawer__scrim {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: rgb(6 4 12 / 68%);
+  backdrop-filter: blur(6px) saturate(120%);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.drawer--open .drawer__scrim {
+  opacity: 1;
+}
+
+.drawer__panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(30rem, 100%);
+  display: flex;
+  align-items: center;
+  padding: var(--space-5);
+  background: linear-gradient(180deg, var(--surface-base), var(--surface-void));
+  border-left: 1px solid var(--line);
+  box-shadow: -32px 0 80px -32px rgb(0 0 0 / 90%);
+  /* Slides and settles rather than sliding flat — the slight overshoot
+     is what separates a panel arriving from a panel being teleported. */
+  transform: translateX(102%);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.drawer--open .drawer__panel {
+  transform: none;
+}
+
+@media (max-width: 40rem) {
+  .drawer__panel {
+    inset: auto 0 0 0;
+    width: 100%;
+    height: auto;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    transform: translateY(102%);
+  }
+}
+
+/* The dichroic seam where the panel meets the page. */
+.drawer__rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: var(--spectrum);
+  opacity: 0.7;
+}
+
+.drawer__panel .panel {
+  width: 100%;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+.drawer__panel .panel::after,
+.drawer__panel .panel::before {
+  display: none;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+
+.icon-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--line-strong);
+  transform: rotate(90deg);
+}
+
+/* -------------------------------------------------------- tile grid */
+
+.panel__header--split {
+  justify-content: space-between;
+}
+
+/* Title and its qualifier share a line instead of stacking. */
+.panel__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.panel__heading .eyebrow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.counter {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.counter__value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  background: var(--spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.counter__label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/*
+ * A scrolling column of large rows. The list grows as connectors land,
+ * so it scrolls inside a fixed-height panel rather than pushing the page
+ * taller — and each row is sized to carry a real logo and a real
+ * heading, not a compact status line.
+ */
+.tile-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: min(80vh, 56rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  /* Fades the last row as it leaves the viewport, so the cut reads as
+     "more below" rather than as a clipped element. */
+  mask-image: linear-gradient(180deg, #000 0%, #000 88%, transparent 100%);
+}
+
+.tile-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tile-grid::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+
+.tile-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+ * Not a card. Each provider is an entry in one continuous list,
+ * separated by a hairline rather than boxed in its own panel — the
+ * column reads as a single index, which is what stacked cards inside an
+ * already-bordered panel stop it from doing.
+ */
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  padding: var(--space-7) var(--space-6);
+  /* Transparent, so the orbiting ring shows through the list rather
+     than being blocked by a slab behind it. */
+  background: transparent;
+  border-bottom: 1px solid var(--line-faint);
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+  transition: background var(--dur) var(--ease-out);
+}
+
+.tile:last-child {
+  border-bottom: none;
+}
+
+.tile:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+/* Each tile carries its provider's own accent, revealed on hover — so
+   the grid stays calm at rest and identifies itself on approach. */
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle 300px at var(--tilt-x, 50%) var(--tilt-y, 50%),
+    color-mix(in srgb, var(--accent-1) 16%, transparent),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+  pointer-events: none;
+}
+
+.tile:hover::before {
+  opacity: 1;
+}
+
+/* Shown only for a connected provider: an unconnected entry needs no
+   marker, and a full column of inert bars would just be noise. */
+.tile__top {
+  display: flex;
+  align-items: center;
+}
+
+/*
+ * The logo sits between the name and the description, unframed and at
+ * full size — the mark itself is the element, not a chip containing one.
+ * Drawn in plain white rather than tinted per provider: four brand
+ * colours down a column turns an index into a sticker sheet, and the
+ * accent still does its job on the edge bar and the status dot.
+ */
+.tile__glyph {
+  display: block;
+  color: var(--text-primary);
+  transition:
+    transform var(--dur) var(--ease-spring),
+    opacity var(--dur) var(--ease-out);
+}
+
+.tile:hover .tile__glyph {
+  transform: scale(1.06);
+}
+
+/* Display-scale: the provider name is the row's headline, not a label. */
+.tile__name {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: var(--track-tight);
+  margin: 0;
+}
+
+.tile__capability {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  letter-spacing: var(--track-normal);
+  max-width: 34ch;
+}
+
+.tile__action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+/* The status chip sits with the action on a row; below that width it
+   would push the button onto its own line for no gain. */
+.tile__pending {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--text-muted);
+  padding: var(--space-3) 0;
+}
+
+/* Planned providers stay legible but visibly inert — no hover accent,
+   no action that would fail. */
+.tile--planned {
+  opacity: 0.62;
+}
+
+.tile--planned:hover {
+  border-color: var(--line-faint);
+  box-shadow: none;
+}
+
+.tile--planned::before {
+  display: none;
+}
+
+.provider-glyph {
+  width: clamp(112px, 16vw, 176px);
+  height: clamp(112px, 16vw, 176px);
+  overflow: visible;
+}
+
+/* --- per-provider motion. Each mark animates the way its own service
+   reads: Spotify's arcs pulse outward like a signal, Apple's notes bob,
+   YouTube's badge breathes while its triangle beats, the file corner
+   folds. Live entries animate continuously; the rest animate on hover,
+   so a connected provider is identifiable without reading a word. --- */
+
+.provider-glyph__arcs path {
+  transform-origin: 24px 34px;
+  transform-box: view-box;
+}
+
+.tile--live .provider-glyph__arcs path,
+.tile:hover .provider-glyph__arcs path {
+  animation: arc-pulse 1.8s var(--ease-in-out) infinite;
+}
+
+.provider-glyph__arcs path:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.provider-glyph__arcs path:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes arc-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.provider-glyph__disc {
+  transform-origin: center;
+  transform-box: view-box;
+}
+
+.tile--live .provider-glyph__disc,
+.tile:hover .provider-glyph__disc {
+  animation: disc-breathe 3.2s var(--ease-in-out) infinite;
+}
+
+@keyframes disc-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.provider-glyph__note {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.tile--live .provider-glyph__note,
+.tile:hover .provider-glyph__note {
+  animation: note-bob 2s var(--ease-in-out) infinite;
+}
+
+@keyframes note-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(-4deg);
+  }
+}
+
+.provider-glyph__ring {
+  transform-origin: center;
+  transform-box: view-box;
+}
+
+.tile--live .provider-glyph__ring,
+.tile:hover .provider-glyph__ring {
+  animation: badge-breathe 2.6s var(--ease-in-out) infinite;
+}
+
+@keyframes badge-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+.provider-glyph__play {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.tile--live .provider-glyph__play,
+.tile:hover .provider-glyph__play {
+  animation: play-pulse 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes play-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.86);
+  }
+}
+
+.provider-glyph__fold {
+  transform-origin: top right;
+  transform-box: fill-box;
+}
+
+.tile--live .provider-glyph__fold,
+.tile:hover .provider-glyph__fold {
+  animation: fold-flip 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes fold-flip {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-14deg);
+  }
+}
+
+/* ---------------------------------------------------------- entrance */
+
+.rise {
+  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

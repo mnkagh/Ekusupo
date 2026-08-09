@@ -1,0 +1,126 @@
+/*
+ * Design tokens — "dichroic".
+ *
+ * The palette is refracted light: a spectrum that shifts teal → violet →
+ * amber across a surface rather than one flat brand colour. That is the
+ * product's own behaviour made visible — a playlist enters the core and
+ * leaves transformed — and it avoids both of the obvious clichés:
+ * indigo-violet gradients (the generated-UI default) and acid lime on
+ * black (the developer-tool default).
+ *
+ * Base is ink-violet, not black: pure #000 kills the spectrum's shadow
+ * end, and a violet-shifted base makes the teal and amber read as light
+ * rather than as paint. Text is bone, not #fff, for the same reason
+ * print does it — pure white on near-black vibrates.
+ */
+:root {
+  /* Surfaces — violet-shifted ink. */
+  --surface-void: #0a0812;
+  --surface-base: #100c1c;
+  --surface-panel: #171225;
+  --surface-raised: #1f1830;
+  --surface-hover: #29203d;
+
+  /* Hairlines. */
+  --line-faint: #241d38;
+  --line: #322847;
+  --line-strong: #453a5f;
+
+  /* Bone, not white. */
+  --text-primary: #f4efe6;
+  --text-secondary: #a89fb8;
+  --text-muted: #6f6683;
+  --text-inverse: #0a0812;
+
+  /* The spectrum. Three stops, used as a set — never one alone as a
+     "brand colour", because the shift between them is the identity. */
+  --spectrum-1: #34e0d0; /* teal   */
+  --spectrum-2: #8b6cf5; /* violet */
+  --spectrum-3: #ffb26b; /* amber  */
+
+  --spectrum: linear-gradient(
+    100deg,
+    var(--spectrum-1) 0%,
+    var(--spectrum-2) 48%,
+    var(--spectrum-3) 100%
+  );
+  --spectrum-soft: linear-gradient(
+    100deg,
+    rgb(52 224 208 / 16%),
+    rgb(139 108 245 / 16%),
+    rgb(255 178 107 / 16%)
+  );
+
+  --glow-teal: rgb(52 224 208 / 22%);
+  --glow-violet: rgb(139 108 245 / 26%);
+  --glow-amber: rgb(255 178 107 / 20%);
+
+  --danger: #ff7a8a;
+  --danger-faint: rgb(255 122 138 / 10%);
+
+  /*
+   * One family, two optical sizes. Inter Tight for headings and Inter
+   * for everything else — the same letterforms throughout, so nothing
+   * on the page looks borrowed from a different design. The mono is kept
+   * only for genuinely tabular things (ids, counts); prose and labels
+   * use the text face, because monospaced UI copy is what made the
+   * earlier version read as a terminal rather than a product.
+   */
+  --font-display: "Inter Tight", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.625rem;
+  --text-2xl: 2.5rem;
+  --text-3xl: 4.25rem;
+
+  --track-tight: -0.02em;
+  --track-normal: -0.008em;
+  --track-wide: 0.18em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+
+  --radius-sm: 2px;
+  --radius: 4px;
+  --radius-lg: 8px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 140ms;
+  --dur: 280ms;
+  --dur-slow: 700ms;
+
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 50%), 0 12px 32px -10px rgb(0 0 0 / 70%);
+  --shadow-lift:
+    0 2px 4px rgb(0 0 0 / 50%), 0 24px 64px -16px rgb(0 0 0 / 80%),
+    0 0 40px -20px var(--glow-violet);
+}
+
+/*
+ * Every animation here is decorative — no state is communicated by
+ * motion alone — so honouring this is a straight removal with no loss of
+ * meaning (CLAUDE.md §20.3).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

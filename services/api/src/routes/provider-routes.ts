@@ -114,17 +114,35 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
         clientSecret: config.spotifyClientSecret,
       });
 
+      // Exchange and storage are caught separately because they fail for
+      // completely different reasons and need different fixes: a failed
+      // exchange means the credentials or redirect URI are wrong, while
+      // failed storage means the server is misconfigured (most often a
+      // missing PROVIDER_TOKEN_ENCRYPTION_KEY). Reporting both as
+      // "exchange_failed" sends the user to re-check credentials that
+      // were never the problem.
+      let session;
       try {
-        const session = await provider.authenticate({
+        session = await provider.authenticate({
           method: "oauth2",
           raw: { code: request.query.code, redirectUri: config.spotifyRedirectUri },
         });
-        await connectionService.saveSession(user.id, "spotify", session);
-        return reply.redirect(`${webAppUrl}/?connected=spotify`);
       } catch (error) {
-        console.warn("[Ekusupo API] Spotify OAuth exchange failed", error);
+        console.warn("[Ekusupo API] Spotify OAuth token exchange failed", error);
         return reply.redirect(`${webAppUrl}/?provider_error=exchange_failed`);
       }
+
+      try {
+        await connectionService.saveSession(user.id, "spotify", session);
+      } catch (error) {
+        console.error(
+          "[Ekusupo API] Spotify authorized successfully but the connection could not be stored — check PROVIDER_TOKEN_ENCRYPTION_KEY",
+          error,
+        );
+        return reply.redirect(`${webAppUrl}/?provider_error=storage_failed`);
+      }
+
+      return reply.redirect(`${webAppUrl}/?connected=spotify`);
     },
   );
 }

@@ -208,6 +208,38 @@ describe("GET /providers/spotify/callback", () => {
     expect(callback.statusCode).toBe(302);
     expect(callback.headers.location).toContain("provider_error=exchange_failed");
   });
+
+  it("distinguishes a storage failure from an exchange failure", async () => {
+    // Spotify authorizes fine; the server just has no encryption key.
+    // Reporting this as `exchange_failed` would send the operator to
+    // re-check credentials that were never the problem.
+    delete process.env.PROVIDER_TOKEN_ENCRYPTION_KEY;
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createSpotifyProviderImpl: fakeSpotifyProvider({
+        method: "oauth2",
+        raw: { accessToken: "token-that-cannot-be-stored" },
+      } as AuthSession),
+    });
+    const sessionCookie = await signUpAndGetCookie();
+
+    const connect = await app.inject({
+      method: "GET",
+      url: "/providers/spotify/connect",
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    const state = connect.cookies.find((c) => c.name === "ekusupo_oauth_state")?.value ?? "";
+
+    const callback = await app.inject({
+      method: "GET",
+      url: `/providers/spotify/callback?code=good-code&state=${state}`,
+      cookies: { ekusupo_session: sessionCookie, ekusupo_oauth_state: state },
+    });
+
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toContain("provider_error=storage_failed");
+    expect(callback.headers.location).not.toContain("exchange_failed");
+  });
 });
 
 describe("DELETE /providers/:provider", () => {

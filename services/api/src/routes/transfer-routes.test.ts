@@ -106,6 +106,54 @@ describe("POST /transfers/dry-run", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("rejects a sourcePlaylistId that isn't a usable string", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    // Rejected outright by the schema, before any route logic runs.
+    // Note what is NOT in this list: `12345` and `["x"]`, which AJV
+    // coerces to "12345" and "x" (see the next test). Coercion is fine —
+    // the route still only ever sees a string — but it means asserting
+    // on the status code alone would prove nothing here.
+    for (const sourcePlaylistId of [{ id: "x" }, "", null]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/transfers/dry-run",
+        payload: { sourcePlaylistId },
+        cookies: { ekusupo_session: sessionCookie },
+      });
+      expect(response.statusCode, `payload ${JSON.stringify(sourcePlaylistId)}`).toBe(400);
+      expect(response.json().code, `payload ${JSON.stringify(sourcePlaylistId)}`).toBe(
+        "FST_ERR_VALIDATION",
+      );
+    }
+  });
+
+  it("coerces a non-string sourcePlaylistId to a string rather than passing it on raw", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    // Fastify's AJV coerces to the declared type: 12345 becomes "12345"
+    // and ["x"] becomes "x". That is the guarantee worth having — the
+    // route body only ever sees a string, where before the schema a raw
+    // number reached the provider. Reaching the "connect Spotify" check
+    // is proof the value survived validation as a string; asserting the
+    // status alone would pass for the wrong reason, since that response
+    // is also a 400.
+    for (const sourcePlaylistId of [12345, ["x"]]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/transfers/dry-run",
+        payload: { sourcePlaylistId },
+        cookies: { ekusupo_session: sessionCookie },
+      });
+      expect(response.statusCode, `payload ${JSON.stringify(sourcePlaylistId)}`).toBe(400);
+      expect(response.json(), `payload ${JSON.stringify(sourcePlaylistId)}`).toMatchObject({
+        error: expect.stringContaining("Connect Spotify"),
+      });
+    }
+  });
+
   it("returns a clear 400 when Spotify isn't connected yet", async () => {
     app = await buildServer();
     const sessionCookie = await signUpAndGetCookie();

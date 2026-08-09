@@ -65,4 +65,29 @@ describe("App", () => {
     expect(await screen.findByText("Connected spotify.")).toBeDefined();
     window.history.replaceState(null, "", "/");
   });
+
+  it("explains a failed connect in plain language instead of showing the raw code", async () => {
+    stubMe({
+      user: { id: "user-1", email: "user@example.com", createdAt: "2026-01-01T00:00:00.000Z" },
+    });
+    // storage_failed specifically must not blame credentials: Spotify
+    // authorized fine, the server just couldn't encrypt the token.
+    window.history.replaceState(null, "", "/?provider_error=storage_failed");
+    render(<App />);
+
+    expect(await screen.findByText(/could not be saved/i)).toBeDefined();
+    expect(screen.queryByText(/storage_failed/)).toBeNull();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("falls back to the raw code for a provider error it doesn't recognize", async () => {
+    stubMe({
+      user: { id: "user-1", email: "user@example.com", createdAt: "2026-01-01T00:00:00.000Z" },
+    });
+    window.history.replaceState(null, "", "/?provider_error=something_new");
+    render(<App />);
+
+    expect(await screen.findByText("Could not connect: something_new")).toBeDefined();
+    window.history.replaceState(null, "", "/");
+  });
 });

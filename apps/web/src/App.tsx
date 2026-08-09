@@ -8,13 +8,28 @@ import { ProvidersScreen } from "./providers/ProvidersScreen.js";
 type AuthState =
   { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; user: PublicUser };
 
+/**
+ * The codes `provider-routes.ts` redirects back with, in plain language
+ * (CLAUDE.md §8.3). Each says what to actually do about it — the raw
+ * code is meaningless to a user, and "exchange_failed" in particular
+ * points at credentials, so it must not be shown for a failure that
+ * wasn't about credentials at all.
+ */
+const PROVIDER_ERROR_MESSAGES: Record<string, string> = {
+  access_denied: "You declined the permission request, so nothing was connected.",
+  exchange_failed:
+    "Spotify rejected the sign-in. Check the server's Spotify client ID, secret, and redirect URI.",
+  storage_failed:
+    "Spotify authorized successfully, but the connection could not be saved. The server is missing its token encryption key.",
+};
+
 /** Read once on mount from `?connected=spotify` / `?provider_error=...` — see ADR-0026. */
 function readProviderRedirectMessage(search: string): string | null {
   const params = new URLSearchParams(search);
   const connected = params.get("connected");
   const error = params.get("provider_error");
   if (connected) return `Connected ${connected}.`;
-  if (error) return `Could not connect: ${error}`;
+  if (error) return PROVIDER_ERROR_MESSAGES[error] ?? `Could not connect: ${error}`;
   return null;
 }
 

@@ -18,6 +18,22 @@ export interface TransferRoutesDeps {
 }
 
 /**
+ * Validated by Fastify rather than by hand, the same way
+ * `auth-routes.ts` validates credentials. Without the schema a JSON
+ * number or object satisfies a truthiness check and reaches the
+ * provider as a non-string playlist id.
+ */
+const dryRunSchema = {
+  body: {
+    type: "object",
+    required: ["sourcePlaylistId"],
+    properties: {
+      sourcePlaylistId: { type: "string", minLength: 1, maxLength: 512 },
+    },
+  },
+};
+
+/**
  * The Dry Run execution mode only (ADR-0011, ADR-0027) — Live Transfer
  * isn't wired up here yet. Source and destination are both the caller's
  * connected Spotify account, the same "no destination-selection UI yet"
@@ -29,17 +45,14 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
   const connectionService = new ProviderConnectionService(providerConnectionStore);
   const makeSpotifyProvider = deps.createSpotifyProviderImpl ?? createSpotifyProvider;
 
-  app.post<{ Body: { sourcePlaylistId?: string } }>(
+  app.post<{ Body: { sourcePlaylistId: string } }>(
     "/transfers/dry-run",
+    { schema: dryRunSchema },
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
 
-      const sourcePlaylistId = request.body?.sourcePlaylistId;
-      if (!sourcePlaylistId) {
-        reply.code(400);
-        return { error: "sourcePlaylistId is required." };
-      }
+      const sourcePlaylistId = request.body.sourcePlaylistId;
 
       const session = await connectionService.getSession(user.id, "spotify");
       if (!session) {

@@ -139,7 +139,7 @@ all — e.g. a capability check failed), or `"cancelled"`.
 
 ## Where does job state live?
 
-Nowhere durable yet. `runTransfer` takes an injectable `TransferJobStore`:
+`runTransfer` takes an injectable `TransferJobStore`:
 
 ```ts
 interface TransferJobStore {
@@ -149,19 +149,24 @@ interface TransferJobStore {
 }
 ```
 
-`InMemoryTransferJobStore` is the default. No `services/api` or
-`services/worker` exist yet (CLAUDE.md §4.7's infrastructure layer isn't
-built), so there's nothing to back a real store with. This is the same
-injection pattern already used for `fetchImpl` in
-`packages/providers/spotify` — the contract is defined now, a real
-(database-backed) implementation is future work once services exist.
+`InMemoryTransferJobStore` is the default, and is what `apps/extension`
+uses. Since ADR-0027, `services/api` backs the same interface with
+Postgres (`PostgresTransferJobStore`), so a transfer started through the
+API survives a restart.
+
+That store adapts rather than changes the interface: none of these
+methods takes a `userId`, so it closes over one at construction and
+scopes every query by it. One user's job id can never read or overwrite
+another's row — a same-id update from the wrong user is a silent no-op.
+Keeping the core interface free of user identity matters because the
+same package runs inside a browser extension that has no concept of
+users.
 
 Cancellation works against this store today: setting a job's status to
 `"cancelled"` mid-run causes `runTransfer` to stop processing further
 tracks the next time it checks. "Resume after interruption" (CLAUDE.md
-§9.3) is not implemented in v0.1 — it needs a real store to resume _from_,
-which doesn't exist yet; the job model is shaped so a future durable store
-could support it without a redesign.
+§9.3) is still not implemented — the durable store now exists to resume
+_from_, but nothing reads it back that way yet.
 
 ## Transfer report
 
@@ -181,13 +186,45 @@ interface TransferReport {
   unavailableItems: Track[];
   providerLimitationsEncountered: string[];
   userActionsRequired: string[];
+  failureReason?: string; // set only when job.status is "failed"
 }
 ```
 
 Every `runTransfer` call returns `{ job, report }`, whether or not every
 item succeeded — a partial failure still produces a complete, readable
-report, never a thrown exception for anything short of "couldn't start the
-job at all."
+report, never a thrown exception.
+
+**Check `job.status` before treating a report as a success.** A run that
+stops before reading the source has all-zero counters, which is
+indistinguishable from a successful transfer of an empty playlist. When
+the status is `"failed"`, `report.failureReason` states the single
+reason the run stopped, as opposed to the per-item notes in
+`providerLimitationsEncountered` (which also contains it, so existing
+renderers keep working). Reading the reason from that list's last
+element would work today only by accident of push ordering — use the
+field.
+
+## HTTP API (`services/api`)
+
+Three routes, all requiring an authenticated session cookie (401
+otherwise) and all scoped to the calling user — see ADR-0027.
+
+| Route                    | Behavior                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `POST /transfers/dry-run` | Body `{ sourcePlaylistId }`. Runs `runDryRunTransfer` and returns `{ job, report }`. 400 if the id is missing or Spotify isn't connected. |
+| `GET /transfers`         | The caller's jobs, newest first, each with its stored report.                                               |
+| `GET /transfers/:id`     | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable. |
+
+Source and destination are both the caller's connected Spotify account;
+there is no destination selection yet. Because Spotify is read-only
+(no `tracks.search`), such a run legitimately plans but never matches —
+expect `status: "partial"` with every track skipped and the limitation
+stated in the report. That is correct behavior, not a bug.
+
+A run that fails returns **200 with `job.status === "failed"`**, not a
+5xx: the request succeeded, the transfer's outcome was failure, and the
+report explaining why is more useful than an opaque status code. The
+route's 502 is reserved for genuinely unexpected errors.
 
 ## Retry and rate-limit handling
 
@@ -251,8 +288,13 @@ stays opinion-free about transfers.
 - Sync Engine (scheduled/recurring transfers) — not detailed anywhere
   beyond a name in CLAUDE.md §4.1's diagram, and not on the roadmap yet.
 - AI-assisted matching — Phase 7.
-- Real job persistence/queueing, retries across process restarts.
-- The API layer that will eventually call `runTransfer` (`services/api`).
+- Job queueing and retries across process restarts. Job _persistence_ is
+  done (ADR-0027), but `services/api` runs a transfer inline in the HTTP
+  request — acceptable for Dry Run, inadequate for large real transfers
+  (CLAUDE.md §13.2).
+- Live Transfer over HTTP. `services/api` exposes Dry Run only
+  (ADR-0027); `runLiveTransfer` is reachable from library code and tests
+  but not from the API.
 - A second real **catalog** provider (another streaming or self-hosted
   service with genuine search) to prove Live Transfer's match-based write
   path cross-provider — still blocked on external credentials, same as

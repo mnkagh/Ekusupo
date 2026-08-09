@@ -5,6 +5,7 @@ import type { PublicUser } from "./api/auth-client.js";
 import { AuthDrawer } from "./auth/AuthDrawer.js";
 import { ImmersiveLanding } from "./landing/ImmersiveLanding.js";
 import { ProvidersScreen } from "./providers/ProvidersScreen.js";
+import { TransferScreen } from "./transfers/TransferScreen.js";
 import { CoreField } from "./visuals/CoreField.js";
 import { IntroScreen } from "./visuals/IntroScreen.js";
 
@@ -143,6 +144,7 @@ export function App() {
                     {redirectMessage.text}
                   </p>
                 )}
+                <TransferScreen />
                 <ProvidersScreen />
               </main>
             )}

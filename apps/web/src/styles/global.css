@@ -1891,3 +1891,302 @@ input {
   white-space: nowrap;
   border: 0;
 }
+
+/* ----------------------------------------------------------- transfer */
+
+.transfer-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.transfer-form__row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+/* The field takes the space; the button keeps its label on one line. */
+.transfer-form__row .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.transfer-form__row .btn {
+  flex: none;
+}
+
+.transfer-form__hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* Stacks below the point where the input would be too narrow to show a
+   full playlist URL. */
+@media (max-width: 40rem) {
+  .transfer-form__row {
+    flex-direction: column;
+  }
+
+  .transfer-form__row .btn {
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------- report */
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-2);
+  animation: rise var(--dur) var(--ease-out) both;
+}
+
+.report__verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.report__verdict--completed .status,
+.report__verdict--partial .status {
+  color: var(--spectrum-1);
+}
+
+.report__verdict--completed .status__dot,
+.report__verdict--partial .status__dot {
+  background: var(--spectrum-1);
+}
+
+.report__verdict--failed .status {
+  color: var(--danger);
+}
+
+.report__verdict--failed .status__dot {
+  background: var(--danger);
+}
+
+.report__reason {
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+/* Auto-fit rather than four fixed columns, so the counts reflow on a
+   phone instead of shrinking to unreadable. */
+.report__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.report__count {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius);
+}
+
+.report__count dt {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.report__count dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.report__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.report__heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.report__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.report__list--muted {
+  color: var(--text-muted);
+}
+
+.report__list--tracks li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.report__track {
+  color: var(--text-primary);
+}
+
+.report__artist {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.report__more {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ history */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-faint);
+}
+
+.history__heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.history__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+
+/* Truncates rather than wrapping: a playlist id is not worth a second
+   line, and wrapping would break the row alignment. */
+.history__playlist {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16ch;
+}
+
+.history__when {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------- small screens */
+
+/*
+ * Phone layout. The desktop composition assumes room for a rail, a wide
+ * panel and a backdrop with space around it — none of which a 360px
+ * viewport has. Rather than shrinking everything proportionally, the
+ * pieces that stop earning their space are removed here.
+ */
+@media (max-width: 40rem) {
+  .shell__inner {
+    padding: var(--space-4) var(--space-4) var(--space-6);
+  }
+
+  /* The backdrop costs a full-screen WebGL surface for decoration that
+     is mostly hidden behind content at this width, and phones are where
+     that battery cost actually matters. */
+  .core-field__canvas {
+    display: none;
+  }
+
+  .landing {
+    padding: var(--space-5) 0;
+  }
+
+  .immersive {
+    min-height: auto;
+    gap: var(--space-5);
+    padding: var(--space-5) 0;
+  }
+
+  /* Two lines of four and three rather than one line of seven, which at
+     this width would set the letters at about 12px. */
+  .immersive__word {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+
+  .immersive__actions {
+    width: 100%;
+  }
+
+  .immersive__actions .btn {
+    width: 100%;
+  }
+
+  /* Rows become blocks: name, logo and action stack instead of being
+     squeezed into three columns. */
+  .tile {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .tile-grid {
+    max-height: none;
+    overflow-y: visible;
+    /* The fade implies scrolling; with the cap removed there is none. */
+    mask-image: none;
+  }
+
+  .panel__header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .report__counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history__when {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Touch devices: hover styling never resolves, so anything that only
+   appears on hover is invisible. Show it unconditionally instead. */
+@media (hover: none) {
+  .tile__glyph,
+  .provider-glyph {
+    opacity: 1;
+  }
+
+  .panel::before {
+    display: none;
+  }
+}

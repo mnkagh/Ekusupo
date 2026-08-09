@@ -90,9 +90,18 @@ becomes the primary dashboard (CLAUDE.md §8).
   - ✅ Connected Providers screen on `apps/web` (ADR-0026) — real
     connect/disconnect UI wired to the routes above, verified with a real
     `vite build`.
+  - ✅ Dry Run transfers on `services/api` (ADR-0027) — the Transfer
+    Engine now runs server-side, with jobs and reports persisted to
+    Postgres and every query scoped to the owning user. Verified against
+    a real booted server over HTTP: sign-up → connect → Dry Run →
+    history, cross-user reads returning 404, tokens confirmed encrypted
+    at rest by searching the on-disk database for the plaintext, and all
+    of it surviving a kill/restart. Spotify is read-only (no
+    `tracks.search`), so a run using it as both source and destination
+    correctly reports `partial` with every track skipped.
   - ⬜ Transfer setup, transfer progress/report, transfer history, UPF
     import/export, account settings — the remaining CLAUDE.md §8.2
-    screens.
+    screens. The transfer API exists; no `apps/web` UI calls it yet.
 
 ## Later (post-MVP)
 

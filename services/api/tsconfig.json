@@ -8,7 +8,9 @@
   "references": [
     { "path": "../../packages/connector-sdk" },
     { "path": "../../packages/core" },
+    { "path": "../../packages/providers/apple-music" },
     { "path": "../../packages/providers/spotify" },
+    { "path": "../../packages/providers/youtube-music" },
     { "path": "../../packages/upf" }
   ]
 }

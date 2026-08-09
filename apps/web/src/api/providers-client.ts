@@ -6,6 +6,15 @@ export interface ConnectedProvider {
   connectedAt: string;
 }
 
+/** What the server says it can actually connect — see provider-registry.ts. */
+export interface CatalogProvider {
+  id: string;
+  displayName: string;
+  authKind: "oauth2" | "serverToken";
+  configured: boolean;
+  requiredEnv: string[];
+}
+
 export interface ProvidersClientConfig {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -50,8 +59,17 @@ export function createProvidersClient(config: ProvidersClientConfig = {}) {
       return request(`/providers/${encodeURIComponent(provider)}`, { method: "DELETE" });
     },
 
-    getSpotifyConnectUrl(): string {
-      return `${baseUrl}/providers/spotify/connect`;
+    listCatalog(): Promise<{ providers: CatalogProvider[] }> {
+      return request("/providers/catalog");
+    },
+
+    /**
+     * A URL to navigate to, never something to `fetch()` — the connect
+     * route is a real server-side 302 to the provider's own consent
+     * page, and fetching it would just retrieve that page's HTML.
+     */
+    getConnectUrl(provider: string): string {
+      return `${baseUrl}/providers/${encodeURIComponent(provider)}/connect`;
     },
   };
 }

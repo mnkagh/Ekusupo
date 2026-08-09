@@ -24,6 +24,21 @@ async function main(): Promise<void> {
     sessionStore: new PostgresSessionStore(db),
     providerConnectionStore: new PostgresProviderConnectionStore(db),
     db,
+    providerCredentials: {
+      spotify: {
+        clientId: process.env.SPOTIFY_CLIENT_ID,
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+        redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+      },
+      "youtube-music": {
+        clientId: process.env.YOUTUBE_CLIENT_ID,
+        clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+        redirectUri: process.env.YOUTUBE_REDIRECT_URI,
+      },
+      "apple-music": {
+        developerToken: process.env.APPLE_MUSIC_DEVELOPER_TOKEN,
+      },
+    },
     providerRoutesConfig: {
       spotifyClientId: process.env.SPOTIFY_CLIENT_ID,
       spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET,

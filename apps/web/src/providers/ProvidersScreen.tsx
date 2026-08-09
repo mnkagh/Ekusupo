@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { providersClient } from "../api/providers-client.js";
-import type { ConnectedProvider } from "../api/providers-client.js";
+import type { CatalogProvider, ConnectedProvider } from "../api/providers-client.js";
 import { useTilt } from "../visuals/useTilt.js";
 import { PROVIDER_CATALOG } from "./provider-catalog.js";
 import type { ProviderDescriptor } from "./provider-catalog.js";
 import { ProviderGlyph } from "./ProviderGlyph.js";
 
-type ListState = { status: "loading" } | { status: "loaded"; providers: ConnectedProvider[] };
+type ListState =
+  | { status: "loading" }
+  | { status: "loaded"; providers: ConnectedProvider[]; catalog: CatalogProvider[] };
 
 function formatConnectedAt(iso: string): string {
   const date = new Date(iso);
@@ -17,6 +19,8 @@ function formatConnectedAt(iso: string): string {
 
 interface TileProps {
   descriptor: ProviderDescriptor;
+  /** What the server reports for this provider; absent means it isn't in the registry. */
+  catalogEntry?: CatalogProvider;
   connection?: ConnectedProvider;
   disconnecting: boolean;
   onDisconnect: (provider: string) => void;
@@ -32,15 +36,24 @@ interface TileProps {
  * runs a signal along its top edge, and animates its glyph continuously,
  * while an unconnected one stays inert until hovered.
  */
-function ProviderTile({ descriptor, connection, disconnecting, onDisconnect, index }: TileProps) {
+function ProviderTile({
+  descriptor,
+  catalogEntry,
+  connection,
+  disconnecting,
+  onDisconnect,
+  index,
+}: TileProps) {
   const tiltRef = useTilt<HTMLLIElement>({ max: 7, lift: 8 });
   const connected = Boolean(connection);
-  const planned = descriptor.availability === "planned";
+  // "Can this actually be connected" is the server's answer, not ours —
+  // it depends on which credentials the operator configured.
+  const connectable = catalogEntry?.configured ?? false;
 
   return (
     <li
       ref={tiltRef}
-      className={`tile ${connected ? "tile--live" : ""} ${planned ? "tile--planned" : ""}`}
+      className={`tile ${connected ? "tile--live" : ""} ${connectable ? "" : "tile--planned"}`}
       style={
         {
           "--accent-1": descriptor.accent[0],
@@ -60,17 +73,21 @@ function ProviderTile({ descriptor, connection, disconnecting, onDisconnect, ind
       <p className="tile__capability">
         {connected && connection
           ? `Connected on ${formatConnectedAt(connection.connectedAt)}`
-          : descriptor.capability}
+          : connectable
+            ? descriptor.capability
+            : // Names what the operator is missing rather than a vague
+              // "unavailable" the user can do nothing with.
+              `Needs ${catalogEntry?.requiredEnv.join(", ") ?? "server configuration"}`}
       </p>
 
       <div className="tile__action">
         <span className={`status ${connected ? "status--live" : "status--idle"}`}>
           <span className="status__dot" aria-hidden="true" />
-          {connected ? "Connected" : planned ? "Planned" : "Not connected"}
+          {connected ? "Connected" : connectable ? "Not connected" : "Unavailable"}
         </span>
 
-        {planned ? (
-          <span className="tile__pending">Not available yet</span>
+        {!connectable ? (
+          <span className="tile__pending">Not configured</span>
         ) : connected ? (
           <button
             type="button"
@@ -81,7 +98,7 @@ function ProviderTile({ descriptor, connection, disconnecting, onDisconnect, ind
             {disconnecting ? "Disconnecting…" : "Disconnect"}
           </button>
         ) : (
-          <a className="btn btn--connect" href={providersClient.getSpotifyConnectUrl()}>
+          <a className="btn btn--connect" href={providersClient.getConnectUrl(descriptor.id)}>
             Connect {descriptor.name}
           </a>
         )}
@@ -91,19 +108,26 @@ function ProviderTile({ descriptor, connection, disconnecting, onDisconnect, ind
 }
 
 /**
- * The Spotify "Connect" control is a plain link, not a button with a
- * click handler — `/providers/spotify/connect` is a real server-side
- * redirect the browser needs to navigate to, not something to call from
- * JS. See ADR-0026.
+ * Each "Connect" control is a plain link, not a button with a click
+ * handler — /providers/:provider/connect is a real server-side redirect
+ * the browser must navigate to, not something to call from JS. See
+ * ADR-0026.
+ *
+ * Which providers are connectable comes from the server rather than from
+ * this file: only the server knows which credentials it holds.
  */
 export function ProvidersScreen() {
   const [state, setState] = useState<ListState>({ status: "loading" });
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   const reload = () => {
-    void providersClient.listProviders().then(({ providers }) => {
-      setState({ status: "loaded", providers });
-    });
+    // Both in one pass: the catalog says what is connectable, the
+    // connection list says what already is.
+    void Promise.all([providersClient.listProviders(), providersClient.listCatalog()])
+      .then(([{ providers }, { providers: catalog }]) => {
+        setState({ status: "loaded", providers, catalog });
+      })
+      .catch(() => setState({ status: "loaded", providers: [], catalog: [] }));
   };
 
   useEffect(reload, []);
@@ -117,6 +141,7 @@ export function ProvidersScreen() {
   };
 
   const connections = state.status === "loaded" ? state.providers : [];
+  const catalog = state.status === "loaded" ? state.catalog : [];
   const liveCount = connections.length;
 
   return (
@@ -149,6 +174,7 @@ export function ProvidersScreen() {
                 key={descriptor.id}
                 index={index}
                 descriptor={descriptor}
+                catalogEntry={catalog.find((entry) => entry.id === descriptor.id)}
                 connection={connections.find((entry) => entry.provider === descriptor.id)}
                 disconnecting={disconnecting === descriptor.id}
                 onDisconnect={handleDisconnect}

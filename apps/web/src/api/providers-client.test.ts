@@ -43,8 +43,17 @@ describe("createProvidersClient", () => {
     await expect(client.listProviders()).rejects.toBeInstanceOf(ApiError);
   });
 
-  it("getSpotifyConnectUrl returns a real navigable URL, not something to fetch", () => {
+  it("getConnectUrl returns a real navigable URL, not something to fetch", () => {
     const client = createProvidersClient({ baseUrl: "https://api.example.com" });
-    expect(client.getSpotifyConnectUrl()).toBe("https://api.example.com/providers/spotify/connect");
+    expect(client.getConnectUrl("spotify")).toBe(
+      "https://api.example.com/providers/spotify/connect",
+    );
+  });
+
+  it("escapes the provider id so a crafted value cannot alter the path", () => {
+    const client = createProvidersClient({ baseUrl: "https://api.example.com" });
+    expect(client.getConnectUrl("../admin")).toBe(
+      "https://api.example.com/providers/..%2Fadmin/connect",
+    );
   });
 });

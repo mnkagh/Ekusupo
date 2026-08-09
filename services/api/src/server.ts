@@ -13,8 +13,11 @@ import { createDb } from "./db/client.js";
 import type { Database } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import type { ProviderConnectionStore } from "./providers/provider-connection-store.js";
+import type { ProviderCredentials } from "./providers/provider-registry.js";
+import type { ConnectRoutesDeps } from "./routes/connect-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import type { ProviderRoutesConfig, ProviderRoutesDeps } from "./routes/provider-routes.js";
+import { registerConnectRoutes } from "./routes/connect-routes.js";
 import { registerProviderRoutes } from "./routes/provider-routes.js";
 import { registerTransferRoutes } from "./routes/transfer-routes.js";
 import type { TransferRoutesDeps } from "./routes/transfer-routes.js";
@@ -35,6 +38,10 @@ export interface BuildServerOptions {
   db?: Database;
   createTransferSpotifyProviderImpl?: TransferRoutesDeps["createSpotifyProviderImpl"];
   createSpotifyAppSessionImpl?: TransferRoutesDeps["createSpotifyAppSessionImpl"];
+  /** Per-provider credentials, keyed by provider id — see provider-registry.ts. */
+  providerCredentials?: Record<string, ProviderCredentials>;
+  /** Test seam: replaces parts of a provider definition without a live network call. */
+  providerOverrides?: ConnectRoutesDeps["overrides"];
 }
 
 /**
@@ -79,6 +86,23 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     providerConnectionStore,
     config: options.providerRoutesConfig,
     createSpotifyProviderImpl: options.createSpotifyProviderImpl,
+  });
+
+  // Registry-driven connect/disconnect for every provider. Registered
+  // before the Spotify-specific routes so the generic
+  // /providers/:provider/connect handles anything the registry knows.
+  registerConnectRoutes(app, {
+    authService,
+    providerConnectionStore,
+    credentials: options.providerCredentials ?? {
+      spotify: {
+        clientId: options.providerRoutesConfig?.spotifyClientId,
+        clientSecret: options.providerRoutesConfig?.spotifyClientSecret,
+        redirectUri: options.providerRoutesConfig?.spotifyRedirectUri,
+      },
+    },
+    webAppUrl: options.providerRoutesConfig?.webAppUrl ?? "http://localhost:5173",
+    overrides: options.providerOverrides,
   });
 
   registerTransferRoutes(app, {

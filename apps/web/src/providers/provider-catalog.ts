@@ -21,6 +21,12 @@ export interface ProviderDescriptor {
   glyph: "wave" | "note" | "play" | "file";
 }
 
+/**
+ * Presentation only. Whether a provider can actually be connected comes
+ * from the server (`GET /providers/catalog`), because only the server
+ * knows which credentials it holds — a hardcoded "available" flag here
+ * was wrong the moment an operator configured YouTube.
+ */
 export const PROVIDER_CATALOG: ProviderDescriptor[] = [
   {
     id: "spotify",
@@ -33,25 +39,17 @@ export const PROVIDER_CATALOG: ProviderDescriptor[] = [
   {
     id: "apple-music",
     name: "Apple Music",
-    capability: "Connector in progress",
-    availability: "planned",
+    capability: "Catalogue search — reads with a server token",
+    availability: "available",
     accent: ["#fa2f56", "#ff7a8a"],
     glyph: "note",
   },
   {
     id: "youtube-music",
     name: "YouTube Music",
-    capability: "Connector in progress",
-    availability: "planned",
+    capability: "Read playlists from your YouTube account",
+    availability: "available",
     accent: ["#ff0033", "#ffb26b"],
     glyph: "play",
-  },
-  {
-    id: "upf-file",
-    name: "UPF File",
-    capability: "Export and import without an account",
-    availability: "planned",
-    accent: ["#34e0d0", "#ffb26b"],
-    glyph: "file",
   },
 ];

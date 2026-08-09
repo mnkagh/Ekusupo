@@ -19,7 +19,9 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.0",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "@ekusupo/provider-apple-music": "workspace:*",
+    "@ekusupo/provider-youtube-music": "workspace:*"
   },
   "devDependencies": {
     "@electric-sql/pglite-socket": "^0.0.10",

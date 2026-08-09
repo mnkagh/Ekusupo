@@ -16,12 +16,49 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const CATALOG = {
+  providers: [
+    {
+      id: "spotify",
+      displayName: "Spotify",
+      authKind: "oauth2",
+      configured: true,
+      requiredEnv: ["SPOTIFY_CLIENT_ID"],
+    },
+    {
+      id: "apple-music",
+      displayName: "Apple Music",
+      authKind: "serverToken",
+      configured: false,
+      requiredEnv: ["APPLE_MUSIC_DEVELOPER_TOKEN"],
+    },
+    {
+      id: "youtube-music",
+      displayName: "YouTube Music",
+      authKind: "oauth2",
+      configured: false,
+      requiredEnv: ["YOUTUBE_CLIENT_ID"],
+    },
+  ],
+};
+
+/**
+ * The screen reads two endpoints: the catalog (what the server *can*
+ * connect) and the connection list (what already is). Both must be
+ * stubbed — the catalog is what decides whether a Connect control is
+ * offered at all.
+ */
+function stubApi(connected: { provider: string; connectedAt: string }[], catalog = CATALOG) {
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === "DELETE") return jsonResponse({ disconnected: true });
+    if (url.toString().includes("/providers/catalog")) return jsonResponse(catalog);
+    return jsonResponse({ providers: connected });
+  });
+}
+
 describe("ProvidersScreen", () => {
-  it("shows a Connect Spotify link when nothing is connected", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => jsonResponse({ providers: [] })),
-    );
+  it("shows a Connect link for a provider the server is configured for", async () => {
+    vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
     const link = (await screen.findByRole("link", {
@@ -30,14 +67,27 @@ describe("ProvidersScreen", () => {
     expect(link.href).toContain("/providers/spotify/connect");
   });
 
-  it("shows Connected + a Disconnect button when Spotify is already connected", async () => {
+  it("offers no Connect control for a provider the server has no credentials for", async () => {
+    vi.stubGlobal("fetch", stubApi([]));
+    render(<ProvidersScreen />);
+
+    await screen.findByRole("link", { name: "Connect Spotify" });
+    // A button that would fail on click is worse than no button.
+    expect(screen.queryByRole("link", { name: "Connect YouTube Music" })).toBeNull();
+    expect(screen.getAllByText("Not configured").length).toBeGreaterThan(0);
+  });
+
+  it("names the missing environment variables so the operator knows the fix", async () => {
+    vi.stubGlobal("fetch", stubApi([]));
+    render(<ProvidersScreen />);
+
+    expect(await screen.findByText(/Needs YOUTUBE_CLIENT_ID/)).toBeDefined();
+  });
+
+  it("shows Connected and a Disconnect button when a provider is connected", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse({
-          providers: [{ provider: "spotify", connectedAt: "2026-01-01T00:00:00.000Z" }],
-        }),
-      ),
+      stubApi([{ provider: "spotify", connectedAt: "2026-01-01T00:00:00.000Z" }]),
     );
     render(<ProvidersScreen />);
 
@@ -54,6 +104,7 @@ describe("ProvidersScreen", () => {
           connected = false;
           return jsonResponse({ disconnected: true });
         }
+        if (url.toString().includes("/providers/catalog")) return jsonResponse(CATALOG);
         return jsonResponse({
           providers: connected
             ? [{ provider: "spotify", connectedAt: "2026-01-01T00:00:00.000Z" }]
@@ -66,5 +117,17 @@ describe("ProvidersScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
 
     expect(await screen.findByRole("link", { name: "Connect Spotify" })).toBeDefined();
+  });
+
+  it("renders an empty list rather than blanking when the API is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ error: "boom" }, 500)),
+    );
+    render(<ProvidersScreen />);
+
+    // Still shows the panel and every provider as unconfigured, instead
+    // of leaving the user on a permanent loading state.
+    expect(await screen.findByText("Providers")).toBeDefined();
   });
 });

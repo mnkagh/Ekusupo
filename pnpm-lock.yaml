@@ -168,6 +168,9 @@ importers:
       '@ekusupo/connector-sdk':
         specifier: workspace:*
         version: link:../../packages/connector-sdk
+      '@ekusupo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@ekusupo/provider-spotify':
         specifier: workspace:*
         version: link:../../packages/providers/spotify

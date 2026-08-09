@@ -118,7 +118,7 @@ describe("runDryRunTransferForResource", () => {
     ]);
   });
 
-  it("reports a failure instead of throwing when the engine itself throws", async () => {
+  it("reports a failure, not a completion, when the source can't be read", async () => {
     const provider: MusicProvider = {
       manifest: {
         name: "spotify",
@@ -136,16 +136,25 @@ describe("runDryRunTransferForResource", () => {
       },
     };
     const onFailed = vi.fn();
+    const onCompleted = vi.fn();
 
     await runDryRunTransferForResource(playlistResource, {
       getProvider: () => provider,
       getSession: () => session,
       onProgress: vi.fn(),
-      onCompleted: vi.fn(),
+      onCompleted,
       onFailed,
     });
 
-    expect(onFailed).toHaveBeenCalledWith("network unreachable");
+    // The engine turns a source-read failure into a `failed` job rather
+    // than throwing, so the reason arrives via the report. Asserting
+    // `onCompleted` stayed unused is the point of this test: a failed run
+    // has all-zero counters and would otherwise be indistinguishable from
+    // a successful transfer of an empty playlist.
+    expect(onFailed).toHaveBeenCalledWith(
+      "Could not read the source playlist: network unreachable",
+    );
+    expect(onCompleted).not.toHaveBeenCalled();
   });
 });
 

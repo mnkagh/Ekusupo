@@ -16,6 +16,17 @@ export interface TransferReport {
   unavailableItems: Track[];
   providerLimitationsEncountered: string[];
   userActionsRequired: string[];
+  /**
+   * Set only when the job's status is `failed` — the single reason the
+   * whole transfer stopped, as opposed to the per-item notes above.
+   * Clients need this to tell "finished, with caveats" from "did not
+   * finish", which the counters alone can't express: a run that fails
+   * before reading the source has all-zero counters, exactly like a run
+   * over an empty playlist (CLAUDE.md §16.3, "errors should be
+   * classified"). Also appended to `providerLimitationsEncountered` so
+   * existing report renderers still show it without changes.
+   */
+  failureReason?: string;
 }
 
 export function createEmptyReport(

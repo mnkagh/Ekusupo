@@ -33,7 +33,7 @@ explains how to generate. Leave the Spotify values blank for now —
 pnpm build         # tsc -b across every package
 pnpm lint          # eslint
 pnpm format:check  # prettier
-pnpm test          # vitest, 246 tests
+pnpm test          # vitest, 256 tests
 pnpm audit         # dependency vulnerabilities
 ```
 
@@ -41,6 +41,12 @@ All five should pass with no output beyond the command echo. `pnpm test`
 takes roughly 30 seconds; `services/api`'s tests are slower than the
 rest because they run against a real embedded Postgres rather than a
 mock (ADR-0024), and each one boots its own instance.
+
+Because every one of those tests compiles and boots a real database,
+the suite is unusually sensitive to a busy machine. **Stop the API
+server and `db:serve` before running it** — leaving one running can
+starve the tests into timeouts that look like real failures but
+disappear on a quiet machine.
 
 To run a subset:
 
@@ -221,7 +227,48 @@ cross-provider integration test, which moves a playlist into a UPF file:
 pnpm exec vitest run tests/integration
 ```
 
-## 5. The browser extension
+## 5. Browsing the database (pgAdmin, psql, DBeaver)
+
+The database is genuine Postgres, but it normally runs _inside_ the API
+process and never opens a port — so by default there is nothing for
+pgAdmin to connect to. To get one:
+
+```sh
+# stop the API server first — see the warning below
+cd services/api && pnpm db:serve
+```
+
+That serves the same on-disk data over the real Postgres wire protocol:
+
+| Setting  | Value       |
+| -------- | ----------- |
+| Host     | `127.0.0.1` |
+| Port     | `5432`      |
+| Database | `postgres`  |
+| Username | `postgres`  |
+| Password | _(blank)_   |
+
+Any Postgres client works — pgAdmin, psql, DBeaver, TablePlus. The
+server reports itself as PostgreSQL 17.5, because that is what it
+actually is.
+
+Two limitations, both real:
+
+- **Stop the API server first.** `pglite` is single-process: one data
+  directory, one owner. Running both against the same directory risks
+  corrupting it. This is why `db:serve` is a separate command rather
+  than something the API does on the side.
+- **One connection at a time.** The socket bridge available for this
+  pglite version is single-connection. `psql` and a single DBeaver
+  session are fine. pgAdmin opens several connections at once and may
+  struggle — if it does, use `psql` or read the data through the API
+  instead. This is a limitation of the bridge, not of your setup.
+
+There is no authentication on that socket, which is exactly why it binds
+to `127.0.0.1` and never `0.0.0.0` — the database holds password hashes
+and encrypted provider tokens.
+
+## 6. The browser extension
 
 ```sh
 cd apps/extension && pnpm build
@@ -239,7 +286,7 @@ The extension runs the Transfer Engine locally in its own service
 worker; it does not talk to `services/api`. Connecting the two is not
 done yet.
 
-## 6. Resetting
+## 7. Resetting
 
 ```sh
 rm -rf services/api/data      # wipes users, sessions, connections, transfers
@@ -249,7 +296,7 @@ The schema is recreated automatically on next start. There is no
 migration framework yet, deliberately — no released data exists to
 migrate (ADR-0024).
 
-## 7. What is not built yet
+## 8. What is not built yet
 
 So you know where the edges are, rather than discovering them by
 hitting one:

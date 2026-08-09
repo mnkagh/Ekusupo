@@ -15,13 +15,27 @@ import * as schema from "./schema.js";
  * running server).
  */
 export function createDb(dataDir?: string) {
+  return createDbFromClient(createPgliteClient(dataDir));
+}
+
+/** Wraps an existing client, so a caller holding one doesn't open a second instance on the same directory. */
+export function createDbFromClient(client: PGlite) {
+  return drizzle(client, { schema });
+}
+
+/**
+ * The underlying `PGlite` instance, without Drizzle wrapped around it.
+ * Only `db/serve.ts` needs this — the socket server speaks the Postgres
+ * wire protocol directly and has no use for a query builder. Everything
+ * else should go through `createDb`.
+ */
+export function createPgliteClient(dataDir?: string): PGlite {
   // pglite's own directory creation isn't recursive — it errors if the
   // parent doesn't already exist (found by actually restarting a real
   // server against a fresh checkout, not just running `tsc`).
   if (dataDir) mkdirSync(dataDir, { recursive: true });
 
-  const client = new PGlite(dataDir);
-  return drizzle(client, { schema });
+  return new PGlite(dataDir);
 }
 
 export type Database = ReturnType<typeof createDb>;

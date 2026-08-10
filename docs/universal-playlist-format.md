@@ -219,6 +219,40 @@ documented in this file's changelog (added once the first breaking change
 occurs) and reflected in a new ADR. `1.0.0` will be the first version this
 project commits to keeping backward compatible per CLAUDE.md §22.2.
 
+## Validation
+
+`parseUpfDocument(value)` and `parseUpfJson(text)` in `@ekusupo/upf`
+check a document against this specification. They return a result rather
+than throwing: an invalid document is an ordinary, expected outcome of
+accepting a file from someone, not an exception (CLAUDE.md §16.3).
+
+```ts
+const result = parseUpfJson(await file.text());
+if (!result.ok) {
+  // [{ path: "playlists[0].items[3].track.title", message: "Must not be empty." }, …]
+  result.errors.forEach((error) => console.error(error.path, error.message));
+}
+```
+
+Three properties worth knowing:
+
+- **Every fault is reported, not the first.** Someone repairing a
+  hand-edited file wants the whole list; returning one error turns a
+  single repair into as many round trips as there are mistakes. The list
+  caps at 50 and says how many it dropped rather than dropping them
+  silently.
+- **Unknown fields are preserved, not stripped.** Provider extensions
+  live there, and a document that loses them on a round trip through
+  Ekusupo defeats the point of the format.
+- **A newer document is refused.** Within `0.x` the minor is the breaking
+  axis, so a `0.2` file is not assumed readable by a `0.1` parser. The
+  error says to upgrade rather than pretending to understand it.
+
+The web dashboard deliberately does **not** re-implement any of this;
+it checks JSON syntax so an unreadable file fails without a round trip,
+and leaves every question about whether the JSON is _UPF_ to the server
+(ADR-0032).
+
 ## Deferred / Out of Scope for v0.1
 
 Explicitly not modeled yet, to avoid designing blind before the phases

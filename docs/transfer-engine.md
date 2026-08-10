@@ -206,14 +206,40 @@ field.
 
 ## HTTP API (`services/api`)
 
-Three routes, all requiring an authenticated session cookie (401
-otherwise) and all scoped to the calling user — see ADR-0027.
+All routes require an authenticated session cookie (401 otherwise) and
+are scoped to the calling user — see ADR-0027 and ADR-0032.
 
-| Route                     | Behavior                                                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /transfers/dry-run` | Body `{ sourcePlaylistId }`. Runs `runDryRunTransfer` and returns `{ job, report }`. 400 if the id is missing or Spotify isn't connected. |
-| `GET /transfers`          | The caller's jobs, newest first, each with its stored report.                                                                             |
-| `GET /transfers/:id`      | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable.                             |
+| Route                        | Behavior                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /transfers/dry-run`    | Body `{ sourcePlaylistId, sourceProvider? }`. Runs `runDryRunTransfer` and returns `{ job, report }`. 400 if the id is missing or the source isn't reachable. |
+| `POST /transfers/live`       | Body `{ sourcePlaylistId, destinationProvider, confirm: true, sourceProvider? }`. Runs `runLiveTransfer`. **Writes.**                                         |
+| `POST /transfers/import-upf` | Body `{ document, destinationProvider, confirm: true, playlistId? }`. Same engine, with the uploaded document as the source.                                  |
+| `GET /transfers`             | The caller's jobs, newest first, each with its stored report and a `hasUpfDocument` flag.                                                                     |
+| `GET /transfers/:id`         | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable.                                                 |
+| `GET /transfers/:id/upf`     | The UPF document that transfer produced, as a download. 404 when there is none, or it is another user's.                                                      |
+
+### Confirming a write
+
+`confirm: true` is required by the route's own JSON schema, not by a
+check inside the handler. A Live Transfer writes to a real destination
+and CLAUDE.md §9.3 requires explicit confirmation for exactly that — in
+the schema, no handler can forget it, and a client that copies the Dry
+Run request shape gets a 400 rather than an unexpected write.
+
+### Choosing a destination
+
+`destinationProvider` is either a provider id from the registry or the
+literal `"upf"`, meaning a downloadable UPF document. `"upf"` is not a
+registry entry: there is no account to connect and no credentials to
+configure, so `GET /providers/catalog` has nothing to say about it. It is
+always available.
+
+A provider destination is rejected up front, before the source is read,
+when its connector does not declare `playlists.create` and
+`playlists.addTracks` — the error names the provider and offers the file
+destination instead. Today that rejects Spotify (read-only) and Apple
+Music (catalogue-only); YouTube Music passes and then requires a
+connected account.
 
 ### Who needs to connect an account
 
@@ -227,11 +253,11 @@ path; Spotify has no unauthenticated API. What the anonymous path
 removes is the _end user's_ involvement, not the credential. Writing to
 a destination will always require a connected account.
 
-Source and destination are both Spotify;
-there is no destination selection yet. Because Spotify is read-only
-(no `tracks.search`), such a run legitimately plans but never matches —
-expect `status: "partial"` with every track skipped and the limitation
-stated in the report. That is correct behavior, not a bug.
+A Dry Run uses the same provider as both source and destination, since
+nothing is written and there is nothing to choose. Because Spotify is
+read-only (no `tracks.search`), such a run legitimately plans but never
+matches — expect `status: "partial"` with every track skipped and the
+limitation stated in the report. That is correct behavior, not a bug.
 
 A run that fails returns **200 with `job.status === "failed"`**, not a
 5xx: the request succeeded, the transfer's outcome was failure, and the

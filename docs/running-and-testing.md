@@ -33,7 +33,7 @@ explains how to generate. Leave the Spotify values blank for now —
 pnpm build         # tsc -b across every package
 pnpm lint          # eslint
 pnpm format:check  # prettier
-pnpm test          # vitest, 370 tests
+pnpm test          # vitest, 437 tests
 pnpm audit         # dependency vulnerabilities
 ```
 
@@ -83,6 +83,11 @@ Open <http://localhost:5173>. You can:
 4. **See the Connected Providers screen**, which will show Spotify as
    not connected. Clicking Connect returns a clear error until §4 is
    done.
+5. **Import a UPF file and export it again**, on the UPF files panel.
+   This is the one full transfer round trip that needs no provider
+   account at all — see §4's "Putting a UPF file back".
+6. **Change your password, download your data, or delete your account**,
+   on the Account panel — see §6b.
 
 ### From the command line
 
@@ -220,8 +225,44 @@ catalog to match against. The report says so explicitly in
 `providerLimitationsEncountered`. A real cross-provider transfer needs a
 second connector, which is the next major piece of work.
 
-To see a genuinely successful end-to-end transfer today, run the
-cross-provider integration test, which moves a playlist into a UPF file:
+### Running a real Live Transfer, into a file
+
+This one genuinely writes, and you can see the result. Pick **A UPF file
+(download)** as the destination on the Transfer panel, press
+**Transfer**, accept the confirmation, and download the file. Or over
+HTTP:
+
+```sh
+curl -s -b jar.txt -X POST $API/transfers/live \
+  -H 'Content-Type: application/json' \
+  -d '{"sourcePlaylistId":"37i9dQZF1DXcBWIGoYBM5M","destinationProvider":"upf","confirm":true}'
+
+# Then fetch the document the transfer produced:
+curl -s -b jar.txt $API/transfers/<jobId>/upf
+```
+
+`confirm: true` is required by the route's schema, not by politeness —
+drop it and you get a 400 (ADR-0032). Expect `"status": "completed"` with
+`createdItems` equal to the track count, and `matchedItems: 0` — a file
+has no catalogue to match against, so tracks are written through as-is
+(ADR-0018). The report says so.
+
+**Every other destination will refuse, and should.** Spotify's connector
+is read-only and Apple Music's is catalogue-only, so both return a 400
+naming the limitation. YouTube Music is the one real streaming
+destination; it needs a Google Cloud OAuth client, and it has not been
+verified against live servers.
+
+### Putting a UPF file back
+
+Upload one on the **UPF files** panel, choose a destination, and press
+Import. An invalid file is rejected with every fault listed by path
+rather than one generic message — try hand-editing a `createdAt` to
+`"nope"` and uploading it to see that.
+
+To see a cross-provider transfer proven end-to-end without any account at
+all, run the integration tests, which move a playlist between two
+independently-implemented connectors:
 
 ```sh
 pnpm exec vitest run tests/integration
@@ -342,6 +383,25 @@ The extension runs the Transfer Engine locally in its own service
 worker; it does not talk to `services/api`. Connecting the two is not
 done yet.
 
+## 6b. Account settings
+
+The **Account** panel is where CLAUDE.md §21.2's promises live:
+
+- **Change password.** Requires the current one even though you are
+  already signed in, and signs out your other devices — but not the tab
+  you are in, which gets a fresh cookie. Prove it by signing in from a
+  private window first, changing the password, then reloading the private
+  window: it is signed out.
+- **Download my data.** Everything Ekusupo holds about you as one JSON
+  file. Provider access tokens are deliberately excluded — they are
+  stored encrypted so that nothing hands them back out. Disconnect a
+  provider to revoke them.
+- **Delete my account.** Needs your password _and_ the literal word
+  `DELETE`. Both are enforced by the API, not just the UI. It really
+  deletes: sessions, provider connections and their encrypted tokens,
+  transfer history and UPF exports all cascade with it, and the email
+  becomes free to sign up with again.
+
 ## 7. Resetting
 
 ```sh
@@ -357,18 +417,20 @@ migrate (ADR-0024).
 So you know where the edges are, rather than discovering them by
 hitting one:
 
-- **Live Transfer over HTTP.** The API exposes Dry Run only. The engine
-  supports Live Transfer and it is tested, but no route calls it.
-- **Part of the dashboard.** CLAUDE.md §8.2 lists thirteen screens.
-  Sign-in, Connected Providers, transfer setup and the transfer report
-  exist. **Transfer history, UPF import/export, and account settings do
-  not.**
-- **Verified Apple Music and YouTube Music.** Both connectors exist and
-  are tested up to the network boundary against injected fakes, but
-  neither has been run against live provider servers — that needs a paid
-  Apple developer account and a Google Cloud OAuth client (ADR-0029).
-  Everything cross-provider that _is_ proven end-to-end is proven against
-  the UPF file connector.
+- **A verified transfer into a streaming provider.** Live Transfer ships
+  and works end-to-end into a UPF file (ADR-0032). YouTube Music is the
+  only connector that declares write capability, and its write path has
+  never met a live Google server — that needs a Google Cloud OAuth
+  client. Apple Music is catalogue-only and Spotify's connector is
+  read-only, so neither can be a destination at all. Everything
+  cross-provider that _is_ proven end-to-end is proven against the UPF
+  file connector.
+- **Apple Music and YouTube Music reads, verified.** Both connectors are
+  tested up to the network boundary against injected fakes, but neither
+  has been run against live provider servers — that needs a paid Apple
+  developer account and a Google Cloud OAuth client (ADR-0029).
+- **Low-confidence match review.** Reports name low-confidence matches,
+  but there is no screen to review and override them (CLAUDE.md §10.4).
 - **A store-listed mobile app.** The dashboard is an installable PWA
   (ADR-0030) — it installs to a home screen and works offline for the
   shell — but it is not in the App Store or Play Store and does not use

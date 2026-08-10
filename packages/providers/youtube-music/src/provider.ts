@@ -32,6 +32,13 @@ export interface YouTubeMusicProviderConfig {
 const MAX_PAGE_SIZE = 50;
 
 /**
+ * At 50 items a page this is 10,000 items, past YouTube's own 5,000-item
+ * playlist limit. A bound rather than an open loop so a paging bug on
+ * either side stops instead of running against the caller's quota.
+ */
+const MAX_ITEM_PAGES = 200;
+
+/**
  * YouTube Music via the **YouTube Data API v3**.
  *
  * The first connector in this repo that can write: the Data API really
@@ -126,18 +133,25 @@ export function createYouTubeMusicProvider(config: YouTubeMusicProviderConfig = 
       // Playlist items are paged, and a music playlist very often runs
       // past one page — stopping at the first would silently truncate
       // the transfer, which is worse than being slow.
+      //
+      // Bounded, and stops on an empty page: an API that kept handing
+      // back the same `nextPageToken` would otherwise loop forever
+      // against the caller's quota.
       const items: YouTubePlaylistItem[] = [];
       let pageToken: string | undefined;
-      do {
-        const page: YouTubeListResponse<YouTubePlaylistItem> = await http.request(
+      for (let page = 0; page < MAX_ITEM_PAGES; page += 1) {
+        const response: YouTubeListResponse<YouTubePlaylistItem> = await http.request(
           session,
           `/playlistItems?part=snippet&maxResults=${pageSize}&playlistId=${encodeURIComponent(playlistId)}${
             pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""
           }`,
         );
-        items.push(...(page.items ?? []));
-        pageToken = page.nextPageToken;
-      } while (pageToken);
+        const pageItems = response.items ?? [];
+        if (pageItems.length === 0) break;
+        items.push(...pageItems);
+        pageToken = response.nextPageToken;
+        if (!pageToken) break;
+      }
 
       return normalizePlaylist(playlist, items);
     },

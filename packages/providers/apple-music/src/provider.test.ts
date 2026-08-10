@@ -128,6 +128,112 @@ describe("getPlaylist", () => {
     expect(headers[0]?.get("Music-User-Token")).toBe("user-token");
   });
 
+  describe("playlists longer than one page", () => {
+    /**
+     * Apple returns at most 100 tracks with the playlist and puts the
+     * rest behind `relationships.tracks.next`. Reading one page and
+     * stopping loses everything past the hundredth *while still
+     * reporting success*, so this is asserted rather than assumed.
+     */
+    function song(id: string, name: string) {
+      return { ...songFixture, id, attributes: { ...songFixture.attributes, name } };
+    }
+
+    it("follows next until every track has been read", async () => {
+      const { fetchImpl, urls } = recordingFetch((url) => {
+        if (url.includes("offset=200")) {
+          return jsonResponse({ data: [song("3", "Third")] });
+        }
+        if (url.includes("offset=100")) {
+          return jsonResponse({
+            data: [song("2", "Second")],
+            next: "/v1/catalog/us/playlists/pl.abc/tracks?offset=200",
+          });
+        }
+        return jsonResponse({
+          data: [
+            {
+              id: "pl.abc",
+              type: "playlists",
+              attributes: { name: "Long one", isPublic: true },
+              relationships: {
+                tracks: {
+                  data: [song("1", "First")],
+                  next: "/v1/catalog/us/playlists/pl.abc/tracks?offset=100",
+                },
+              },
+            },
+          ],
+        });
+      });
+
+      const provider = createAppleMusicProvider({ fetchImpl });
+      const playlist = await provider.getPlaylist!(session, "pl.abc");
+
+      expect(playlist.items.map((item) => item.track.title)).toEqual(["First", "Second", "Third"]);
+
+      // The `/v1` prefix Apple puts on `next` must not be doubled onto a
+      // base that already ends with it, or every follow-up 404s.
+      expect(urls.slice(1).every((url) => !url.includes("/v1/v1/"))).toBe(true);
+      expect(urls[1]).toBe(
+        "https://api.music.apple.com/v1/catalog/us/playlists/pl.abc/tracks?offset=100",
+      );
+    });
+
+    it("makes only one request when there is no next", async () => {
+      const { fetchImpl, urls } = recordingFetch(() =>
+        jsonResponse({
+          data: [
+            {
+              id: "pl.abc",
+              type: "playlists",
+              attributes: { name: "Short one", isPublic: true },
+              relationships: { tracks: { data: [song("1", "Only")] } },
+            },
+          ],
+        }),
+      );
+
+      const provider = createAppleMusicProvider({ fetchImpl });
+      const playlist = await provider.getPlaylist!(session, "pl.abc");
+
+      expect(playlist.items).toHaveLength(1);
+      expect(urls).toHaveLength(1);
+    });
+
+    it("stops rather than looping when a next page comes back empty", async () => {
+      const { fetchImpl, urls } = recordingFetch((url) => {
+        if (url.includes("offset")) {
+          return jsonResponse({
+            data: [],
+            next: "/v1/catalog/us/playlists/pl.abc/tracks?offset=1",
+          });
+        }
+        return jsonResponse({
+          data: [
+            {
+              id: "pl.abc",
+              type: "playlists",
+              attributes: { name: "Odd one", isPublic: true },
+              relationships: {
+                tracks: {
+                  data: [song("1", "Only")],
+                  next: "/v1/catalog/us/playlists/pl.abc/tracks?offset=1",
+                },
+              },
+            },
+          ],
+        });
+      });
+
+      const provider = createAppleMusicProvider({ fetchImpl });
+      const playlist = await provider.getPlaylist!(session, "pl.abc");
+
+      expect(playlist.items).toHaveLength(1);
+      expect(urls).toHaveLength(2);
+    });
+  });
+
   it("resolves Apple's artwork template into a usable URL", async () => {
     const { fetchImpl } = recordingFetch(() =>
       jsonResponse({

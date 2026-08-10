@@ -10,31 +10,48 @@ export interface SpotifyHttpClientConfig {
 
 export interface SpotifyHttpClient {
   request<T>(session: AuthSession, path: string): Promise<T>;
+  /**
+   * Follows a `next` URL from a paging object. Separate from `request`
+   * because Spotify returns those as absolute URLs, and prefixing the
+   * API base to one would produce nonsense.
+   */
+  requestUrl<T>(session: AuthSession, url: string): Promise<T>;
 }
 
 export function createSpotifyHttpClient(config: SpotifyHttpClientConfig = {}): SpotifyHttpClient {
   const fetchImpl = config.fetchImpl ?? fetch;
   const apiBaseUrl = config.apiBaseUrl ?? DEFAULT_API_BASE_URL;
 
+  function accessTokenFrom(session: AuthSession): string {
+    const accessToken = session.raw.accessToken;
+    if (typeof accessToken !== "string") {
+      throw new ConnectorError(
+        "authentication_error",
+        "Session is missing an access token — call authenticate() first.",
+      );
+    }
+    return accessToken;
+  }
+
+  async function get<T>(session: AuthSession, url: string): Promise<T> {
+    const response = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${accessTokenFrom(session)}` },
+    });
+
+    if (!response.ok) {
+      throw mapSpotifyHttpError(response);
+    }
+
+    return (await response.json()) as T;
+  }
+
   return {
-    async request<T>(session: AuthSession, path: string): Promise<T> {
-      const accessToken = session.raw.accessToken;
-      if (typeof accessToken !== "string") {
-        throw new ConnectorError(
-          "authentication_error",
-          "Session is missing an access token — call authenticate() first.",
-        );
-      }
+    request<T>(session: AuthSession, path: string): Promise<T> {
+      return get<T>(session, `${apiBaseUrl}${path}`);
+    },
 
-      const response = await fetchImpl(`${apiBaseUrl}${path}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!response.ok) {
-        throw mapSpotifyHttpError(response);
-      }
-
-      return (await response.json()) as T;
+    requestUrl<T>(session: AuthSession, url: string): Promise<T> {
+      return get<T>(session, url);
     },
   };
 }

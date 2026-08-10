@@ -222,6 +222,11 @@ curl -s -b jar.txt -X POST $API/transfers/dry-run \
   -d '{"sourcePlaylistId":"37i9dQZF1DXcBWIGoYBM5M"}'
 ```
 
+Playlists longer than 100 tracks are read in full — the connectors follow
+each provider's pagination. Worth knowing because the bug in the other
+direction is invisible: a short read reports success with a smaller
+`totalItems`, and nothing looks wrong.
+
 **Expect `"status": "partial"` with every track skipped.** This looks
 like a failure and is not one. Source and destination are both Spotify,
 and Spotify's connector is read-only — it has no `tracks.search`

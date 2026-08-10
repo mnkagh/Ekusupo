@@ -15,6 +15,22 @@ import { appleMusicManifest } from "./manifest.js";
 import { normalizePlaylist, normalizeTrack } from "./normalize.js";
 import type { AppleResponse, ApplePlaylist, AppleSearchResponse, AppleSong } from "./types.js";
 
+/**
+ * At 100 tracks a page this is 10,000 tracks, past any playlist Apple
+ * serves. A bound rather than `while (next)` so a paging bug on either
+ * side stops instead of looping against someone's rate limit.
+ */
+const MAX_TRACK_PAGES = 100;
+
+/**
+ * Apple's `next` is a path that already carries the `/v1` prefix, and
+ * the configured API base ends with `/v1` too — concatenating them asks
+ * for `/v1/v1/…` and 404s.
+ */
+function stripVersionPrefix(next: string): string {
+  return next.startsWith("/v1/") ? next.slice("/v1".length) : next;
+}
+
 export interface AppleMusicProviderConfig {
   /**
    * The signed JWT identifying your app. Generated server-side from an
@@ -121,6 +137,19 @@ export function createAppleMusicProvider(config: AppleMusicProviderConfig = {}):
       return { id, displayName: `Apple Music (${id})` };
     },
 
+    /**
+     * Follows `relationships.tracks.next` to the end of the playlist.
+     *
+     * Apple returns at most 100 tracks with the playlist itself and puts
+     * the rest behind `next`. Reading only the first page silently drops
+     * every track past the hundredth from a transfer while the report
+     * still says it succeeded — the same short-read-that-looks-complete
+     * failure the Spotify connector had.
+     *
+     * `next` arrives as a path already prefixed with `/v1`, which the API
+     * base also ends with, so it is normalised rather than concatenated
+     * — otherwise every follow-up request would ask for `/v1/v1/…`.
+     */
     async getPlaylist(session: AuthSession, playlistId: string): Promise<Playlist> {
       const response = await http.request<AppleResponse<ApplePlaylist>>(
         session,
@@ -131,7 +160,27 @@ export function createAppleMusicProvider(config: AppleMusicProviderConfig = {}):
       if (!playlist) {
         throw new ConnectorError("not_found", `Apple Music playlist ${playlistId} was not found.`);
       }
-      return normalizePlaylist(playlist);
+
+      const songs = [...(playlist.relationships?.tracks?.data ?? [])];
+      let next = playlist.relationships?.tracks?.next;
+
+      for (let page = 1; next && page < MAX_TRACK_PAGES; page += 1) {
+        const following = await http.request<AppleResponse<AppleSong> & { next?: string }>(
+          session,
+          stripVersionPrefix(next),
+        );
+        const pageSongs = following.data ?? [];
+        // A `next` that yields nothing would spin to the cap, doing
+        // nothing but burning rate limit.
+        if (pageSongs.length === 0) break;
+        songs.push(...pageSongs);
+        next = following.next;
+      }
+
+      return normalizePlaylist({
+        ...playlist,
+        relationships: { ...playlist.relationships, tracks: { data: songs } },
+      });
     },
 
     async searchTracks(session: AuthSession, query: SearchQuery): Promise<Page<Track>> {

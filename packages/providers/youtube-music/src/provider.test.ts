@@ -120,6 +120,26 @@ describe("getPlaylist", () => {
     expect(calls).toHaveLength(3);
   });
 
+  it("stops rather than looping when a page repeats its token and returns nothing", async () => {
+    // An API handing back the same `nextPageToken` forever would run
+    // against the caller's quota until it was exhausted — and hang a
+    // test suite on the way there.
+    const { fetchImpl, calls } = recordingFetch((url) =>
+      url.includes("/playlists?")
+        ? jsonResponse({
+            items: [{ id: "PL1", snippet: { title: "Mix" }, status: { privacyStatus: "public" } }],
+          })
+        : jsonResponse({ items: [], nextPageToken: "same-token-forever" }),
+    );
+    const provider = createYouTubeMusicProvider({ fetchImpl });
+
+    const playlist = await provider.getPlaylist!(session, "PL1");
+
+    expect(playlist.items).toEqual([]);
+    // metadata + exactly one empty item page
+    expect(calls).toHaveLength(2);
+  });
+
   it("reports unlisted as unknown rather than public", async () => {
     const { fetchImpl } = recordingFetch((url) =>
       url.includes("/playlists?")

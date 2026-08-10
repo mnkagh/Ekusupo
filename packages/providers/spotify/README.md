@@ -18,6 +18,14 @@ because it's special (CLAUDE.md §3.2) — see `docs/decisions/0002-provider-pac
   `refreshAuthentication`, `revokeAuthentication`, `getProfile`,
   `listPlaylists`, `getPlaylist`.
 
+`getPlaylist` **follows pagination to the end of the playlist**.
+`GET /playlists/{id}` returns only the first 100 tracks and puts the rest
+behind `tracks.next`; reading that one page — which this did until it was
+caught — silently drops every track past the hundredth from a transfer
+while the report still claims success. Bounded at 100 pages, and stops on
+a page that returns nothing, so a paging bug on either side ends rather
+than loops.
+
 ## What's deliberately NOT implemented
 
 Every write operation (`createPlaylist`, `updatePlaylist`, `deletePlaylist`,

@@ -150,6 +150,121 @@ describe("createSpotifyProvider", () => {
     expect(playlist?.items[0]?.track.artists[0]?.name).toBe("The Killers");
   });
 
+  describe("playlists longer than one page", () => {
+    /**
+     * Spotify caps `GET /playlists/{id}` at 100 tracks and puts the rest
+     * behind `tracks.next`. Reading one page and stopping loses every
+     * track past the hundredth *while still reporting success*, which is
+     * why this is tested against page counts rather than trusted.
+     */
+    function pagedFetch(pages: string[][]): typeof fetch {
+      const nextUrlFor = (index: number) =>
+        index + 1 < pages.length ? `https://api.spotify.com/v1/next-page-${index + 1}` : null;
+
+      const pageBody = (index: number) => ({
+        items: (pages[index] ?? []).map((title, position) => ({
+          added_at: "2026-01-01T00:00:00.000Z",
+          track: {
+            id: `track-${index}-${position}`,
+            name: title,
+            duration_ms: 200000,
+            explicit: false,
+            artists: [{ id: "artist-1", name: "Someone" }],
+          },
+        })),
+        total: pages.flat().length,
+        next: nextUrlFor(index),
+      });
+
+      return (async (input: string | URL | Request) => {
+        const url = input.toString();
+        const followed = /next-page-(\d+)/.exec(url);
+
+        if (followed?.[1]) {
+          return jsonResponse(pageBody(Number(followed[1])));
+        }
+        return jsonResponse({
+          id: "playlist-1",
+          name: "Long one",
+          public: true,
+          tracks: pageBody(0),
+        });
+      }) as unknown as typeof fetch;
+    }
+
+    const session = { method: "oauth2" as const, raw: { accessToken: "token" } };
+
+    it("follows next until every track has been read", async () => {
+      const provider = createSpotifyProvider({
+        fetchImpl: pagedFetch([["A", "B"], ["C", "D"], ["E"]]),
+      });
+
+      const playlist = await provider.getPlaylist?.(session, "playlist-1");
+
+      expect(playlist?.items.map((item) => item.track.title)).toEqual(["A", "B", "C", "D", "E"]);
+    });
+
+    it("keeps the pages in order", async () => {
+      const provider = createSpotifyProvider({
+        fetchImpl: pagedFetch([["first"], ["second"], ["third"]]),
+      });
+
+      const playlist = await provider.getPlaylist?.(session, "playlist-1");
+
+      // Track order is playlist order — shuffling it during a transfer
+      // would be a silent corruption of the thing being moved.
+      expect(playlist?.items.map((item) => item.track.title)).toEqual(["first", "second", "third"]);
+    });
+
+    it("stops at a single page when there is no next", async () => {
+      const fetchImpl = vi.fn(pagedFetch([["only"]]));
+      const provider = createSpotifyProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      const playlist = await provider.getPlaylist?.(session, "playlist-1");
+
+      expect(playlist?.items).toHaveLength(1);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops rather than looping when a next page comes back empty", async () => {
+      // A `next` that yields nothing would otherwise spin to the page
+      // cap, doing nothing but burning rate limit.
+      const fetchImpl = vi.fn((async (input: string | URL | Request) => {
+        const url = input.toString();
+        if (url.includes("loop")) {
+          return jsonResponse({ items: [], total: 2, next: "https://api.spotify.com/v1/loop" });
+        }
+        return jsonResponse({
+          id: "playlist-1",
+          name: "Odd one",
+          public: true,
+          tracks: {
+            items: [
+              {
+                added_at: "2026-01-01T00:00:00.000Z",
+                track: {
+                  id: "t1",
+                  name: "Only",
+                  duration_ms: 1000,
+                  explicit: false,
+                  artists: [{ id: "a", name: "A" }],
+                },
+              },
+            ],
+            total: 2,
+            next: "https://api.spotify.com/v1/loop",
+          },
+        });
+      }) as unknown as typeof fetch);
+
+      const provider = createSpotifyProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+      const playlist = await provider.getPlaylist?.(session, "playlist-1");
+
+      expect(playlist?.items).toHaveLength(1);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("maps a 401 from the Spotify API into a ConnectorError", async () => {
     const fetchImpl = createMockFetch({ meStatus: 401 });
     const provider = createSpotifyProvider({ fetchImpl });

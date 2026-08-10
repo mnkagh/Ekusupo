@@ -51,6 +51,17 @@ export interface SpotifyPlaylistTrackItem {
   track: SpotifyTrackObject;
 }
 
+/**
+ * One page of a playlist's tracks. `next` is an **absolute URL** to the
+ * following page, or null on the last one — Spotify builds it, so it is
+ * followed verbatim rather than reconstructed from offsets.
+ */
+export interface SpotifyPagedTracks {
+  items?: SpotifyPlaylistTrackItem[];
+  total: number;
+  next?: string | null;
+}
+
 export interface SpotifyPlaylistObject {
   id: string;
   name: string;
@@ -64,8 +75,13 @@ export interface SpotifyPlaylistObject {
    * `items` is only populated by the single-playlist endpoint
    * (`GET /playlists/{id}`) — the list endpoint (`GET /me/playlists`)
    * returns simplified playlist objects with just a `total` count.
+   *
+   * And even there it is only the **first page**: Spotify caps this at
+   * 100 items and puts the rest behind `next`. `total` is the real
+   * length, which is what makes a short read detectable rather than
+   * silent — see `getPlaylist`.
    */
-  tracks: { items?: SpotifyPlaylistTrackItem[]; total: number };
+  tracks: SpotifyPagedTracks;
   external_urls?: { spotify?: string };
 }
 

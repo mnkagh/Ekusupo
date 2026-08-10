@@ -14,7 +14,12 @@ import type { SpotifyAuthConfig } from "./auth.js";
 import { createSpotifyHttpClient } from "./http.js";
 import { spotifyManifest } from "./manifest.js";
 import { normalizePlaylist } from "./normalize.js";
-import type { SpotifyPagedResponse, SpotifyPlaylistObject, SpotifyUserObject } from "./types.js";
+import type {
+  SpotifyPagedResponse,
+  SpotifyPagedTracks,
+  SpotifyPlaylistObject,
+  SpotifyUserObject,
+} from "./types.js";
 
 export interface SpotifyProviderConfig {
   clientId?: string;
@@ -24,6 +29,14 @@ export interface SpotifyProviderConfig {
 }
 
 const DEFAULT_PAGE_LIMIT = 20;
+
+/**
+ * At 100 tracks a page, 100 pages is 10,000 tracks — comfortably past
+ * Spotify's own 10,000-item playlist limit. A bound rather than a
+ * `while (next)` because a paging bug on either side should stop, not
+ * loop forever against someone's rate limit.
+ */
+const MAX_TRACK_PAGES = 100;
 
 /**
  * An app-level session for reading public catalog data with nobody
@@ -92,12 +105,37 @@ export function createSpotifyProvider(config: SpotifyProviderConfig = {}): Music
       };
     },
 
+    /**
+     * Follows `tracks.next` to the end of the playlist.
+     *
+     * `GET /playlists/{id}` returns only the first 100 tracks. Reading
+     * that one page and stopping — which this did until it was caught —
+     * silently drops every track past the hundredth from a transfer,
+     * while the report still says it succeeded. A short read that looks
+     * like a complete one is the worst failure mode this connector can
+     * have, so it is not merely fixed but bounded: the loop stops on a
+     * missing `next`, on a page that returns nothing, and at a hard cap.
+     */
     async getPlaylist(session: AuthSession, playlistId: string): Promise<Playlist> {
       const playlist = await http.request<SpotifyPlaylistObject>(
         session,
         `/playlists/${encodeURIComponent(playlistId)}`,
       );
-      return normalizePlaylist(playlist);
+
+      const items = [...(playlist.tracks.items ?? [])];
+      let next = playlist.tracks.next;
+
+      for (let page = 1; next && page < MAX_TRACK_PAGES; page += 1) {
+        const following = await http.requestUrl<SpotifyPagedTracks>(session, next);
+        const pageItems = following.items ?? [];
+        // A `next` that yields nothing would otherwise spin until the
+        // cap, doing nothing but burning rate limit.
+        if (pageItems.length === 0) break;
+        items.push(...pageItems);
+        next = following.next;
+      }
+
+      return normalizePlaylist({ ...playlist, tracks: { ...playlist.tracks, items } });
     },
   };
 }

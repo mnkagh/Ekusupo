@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vite build && vite build --config vite.content.config.ts"
+    "build": "vite build && vite build --config vite.content.config.ts",
+    "build:firefox": "node scripts/build-targets.mjs firefox",
+    "build:all": "node scripts/build-targets.mjs chrome firefox"
   },
   "dependencies": {
     "@ekusupo/connector-sdk": "workspace:*",

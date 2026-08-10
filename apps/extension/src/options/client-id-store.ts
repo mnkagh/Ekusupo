@@ -1,3 +1,5 @@
+import { browserApi } from "../shared/browser-api.js";
+
 /**
  * A Client ID is public by design (RFC 6749 §2.2 — it identifies the app,
  * it isn't a secret), so `chrome.storage.local` is appropriate: unlike
@@ -8,10 +10,10 @@
 const STORAGE_KEY = "spotify-client-id";
 
 export async function getSpotifyClientId(): Promise<string | undefined> {
-  const stored = await chrome.storage.local.get(STORAGE_KEY);
+  const stored = await browserApi.storage.local.get(STORAGE_KEY);
   return stored[STORAGE_KEY] as string | undefined;
 }
 
 export async function setSpotifyClientId(clientId: string): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: clientId });
+  await browserApi.storage.local.set({ [STORAGE_KEY]: clientId });
 }

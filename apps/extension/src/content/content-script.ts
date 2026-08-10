@@ -4,11 +4,15 @@
 import { DetectorRegistry } from "../shared/detector-registry.js";
 import { onMessage, sendToBackground } from "../shared/message-bus.js";
 import type { DetectedResource } from "../shared/messages.js";
+import { appleMusicDetector } from "./detectors/apple-music.js";
 import { spotifyDetector } from "./detectors/spotify.js";
+import { youtubeMusicDetector } from "./detectors/youtube-music.js";
 import { InjectionManager } from "./injection-manager.js";
 import { watchLocationChanges } from "./spa-navigation-watcher.js";
 
-const registry = new DetectorRegistry([spotifyDetector]);
+// Order is irrelevant to correctness here — each detector is scoped to a
+// single hostname, so at most one can ever claim a given URL.
+const registry = new DetectorRegistry([spotifyDetector, appleMusicDetector, youtubeMusicDetector]);
 const injectionManager = new InjectionManager();
 
 function handleDetection(resource: DetectedResource): void {

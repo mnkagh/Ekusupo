@@ -1,3 +1,4 @@
+import { browserApi } from "../shared/browser-api.js";
 import type { TransferPanelState } from "../shared/messages.js";
 
 const IDLE_STATE: TransferPanelState = { kind: "idle" };
@@ -15,10 +16,10 @@ function storageKey(tabId: number): string {
 
 export async function getTabTransferState(tabId: number): Promise<TransferPanelState> {
   const key = storageKey(tabId);
-  const stored = await chrome.storage.session.get(key);
+  const stored = await browserApi.storage.session.get(key);
   return (stored[key] as TransferPanelState | undefined) ?? IDLE_STATE;
 }
 
 export async function setTabTransferState(tabId: number, state: TransferPanelState): Promise<void> {
-  await chrome.storage.session.set({ [storageKey(tabId)]: state });
+  await browserApi.storage.session.set({ [storageKey(tabId)]: state });
 }

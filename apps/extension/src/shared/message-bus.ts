@@ -1,3 +1,4 @@
+import { browserApi } from "./browser-api.js";
 import { MessageError } from "./errors.js";
 import type { ExtensionMessage, MessageMap, MessageResponse, MessageType } from "./messages.js";
 
@@ -51,7 +52,7 @@ export function sendToBackground<T extends MessageType>(
   payload: MessageMap[T]["payload"],
 ): Promise<MessageResponse<T>> {
   const message: ExtensionMessage<T> = { type, payload };
-  return dispatch(() => chrome.runtime.sendMessage(message), type);
+  return dispatch(() => browserApi.runtime.sendMessage(message), type);
 }
 
 /** Background talks to a specific tab's content script this way. */
@@ -61,7 +62,7 @@ export function sendToTab<T extends MessageType>(
   payload: MessageMap[T]["payload"],
 ): Promise<MessageResponse<T>> {
   const message: ExtensionMessage<T> = { type, payload };
-  return dispatch(() => chrome.tabs.sendMessage(tabId, message), type);
+  return dispatch(() => browserApi.tabs.sendMessage(tabId, message), type);
 }
 
 type MessageHandler<T extends MessageType> = (
@@ -76,7 +77,7 @@ type MessageHandler<T extends MessageType> = (
  * returns undefined so Chrome tries the next one.
  */
 export function onMessage<T extends MessageType>(type: T, handler: MessageHandler<T>): void {
-  chrome.runtime.onMessage.addListener(
+  browserApi.runtime.onMessage.addListener(
     (message: ExtensionMessage, sender, sendResponse): boolean | undefined => {
       if (message.type !== type) return undefined;
 

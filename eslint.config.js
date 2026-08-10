@@ -260,14 +260,40 @@ const extensionSharedStaysLeaf = {
   },
 };
 
+/**
+ * Build and maintenance scripts run under Node, not in a browser, so
+ * `Buffer`, `console` and friends are legitimately global there. Scoped
+ * to `scripts/` rather than declared repo-wide, so application code is
+ * still caught referencing Node globals it will not have at runtime.
+ */
+const scriptsRunUnderNode = {
+  files: ["**/scripts/**/*.{js,mjs}"],
+  languageOptions: {
+    globals: {
+      Buffer: "readonly",
+      URL: "readonly",
+      console: "readonly",
+      process: "readonly",
+      __dirname: "readonly",
+    },
+  },
+};
+
 export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      // The Firefox build output. A separate entry because the folder
+      // cannot be named `dist` — both targets are built from the same
+      // tree and would otherwise overwrite each other. See ADR-0031.
+      "**/dist-firefox/**",
       "**/out/**",
       "**/node_modules/**",
       "**/*.tsbuildinfo",
       "**/coverage/**",
+      // Ships to the browser as-is and runs in the service worker
+      // global scope, which has neither `window` nor Node globals.
+      "apps/web/public/service-worker.js",
     ],
   },
   js.configs.recommended,
@@ -284,5 +310,6 @@ export default tseslint.config(
   extensionOptionsStaysThin,
   extensionSharedStaysLeaf,
   webNeverImportsBackendPackagesDirectly,
+  scriptsRunUnderNode,
   eslintConfigPrettier,
 );

@@ -95,7 +95,7 @@ onMessage(
         method: "oauth2",
         raw: { code, redirectUri, codeVerifier },
       });
-      sessions.set(provider, session);
+      await sessions.set(provider, session);
       return { connected: true };
     } catch (error) {
       console.warn("[Ekusupo] AuthenticateProvider failed", error);

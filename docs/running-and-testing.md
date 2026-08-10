@@ -198,6 +198,13 @@ The scopes requested are read-only: `user-read-private`,
 your Spotify library, and the Dry Run execution mode is incapable of
 writing to any destination by design (ADR-0011).
 
+A connection made today still works tomorrow: a Spotify access token
+lasts an hour, and the API refreshes it — and re-stores the result —
+whenever it is at or near expiry. Before that was wired up the token and
+the `refreshAuthentication` method both existed and nothing joined them,
+so every connection broke after an hour with an authentication error the
+user could not act on.
+
 ### Confirming your token is encrypted at rest
 
 Worth doing once, because "tokens are encrypted" is the kind of claim

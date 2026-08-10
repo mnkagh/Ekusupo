@@ -12,6 +12,7 @@ import { ProviderConnectionService } from "../providers/provider-connection-serv
 import type { ProviderConnectionStore } from "../providers/provider-connection-store.js";
 import type { ProviderCredentials } from "../providers/provider-registry.js";
 import { findProvider } from "../providers/provider-registry.js";
+import { sessionWithRefresh } from "../providers/session-refresher.js";
 import { PostgresTransferJobStore } from "../transfers/postgres-transfer-job-store.js";
 import { UPF_DESTINATION_ID, describeWriteLimitation } from "../transfers/transfer-destination.js";
 import { TransferRunner } from "../transfers/transfer-runner.js";
@@ -157,8 +158,12 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
   async function resolveSourceSession(
     userId: string,
     providerId: string,
+    provider: MusicProvider,
   ): Promise<{ session: AuthSession; appOnly: boolean } | undefined> {
-    const connected = await connectionService.getSession(userId, providerId);
+    // Refreshed if it is at or near expiry, and re-stored — a Spotify
+    // token lasts an hour, so without this a connection made yesterday
+    // fails today with an authentication error the user cannot act on.
+    const connected = await sessionWithRefresh(userId, providerId, provider, { connectionService });
     if (connected) return { session: connected, appOnly: false };
     if (providerId !== "spotify" || !canReadPublicAnonymously) return undefined;
     return { session: await appSessions.get(), appOnly: true };
@@ -177,7 +182,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
       return undefined;
     }
 
-    const resolved = await resolveSourceSession(userId, providerId);
+    const resolved = await resolveSourceSession(userId, providerId, provider);
     if (!resolved) {
       reply.code(400);
       void reply.send({
@@ -229,7 +234,10 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
       return undefined;
     }
 
-    const session = await connectionService.getSession(userId, providerId);
+    // Refreshed if near expiry — a write can be minutes of work, and
+    // running out of credential halfway through leaves a half-written
+    // playlist on the destination.
+    const session = await sessionWithRefresh(userId, providerId, provider, { connectionService });
     if (!session) {
       reply.code(400);
       reply.send({

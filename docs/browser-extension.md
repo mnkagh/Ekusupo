@@ -474,6 +474,24 @@ Music and YouTube Music detection extended `host_permissions` to
 `*://music.apple.com/*` and `*://music.youtube.com/*`. `permissions`
 stays at `["storage", "identity"]` — neither provider needs a new one.
 
+## Where the provider session lives
+
+`background/session-store.ts` keeps it in **`chrome.storage.session`**,
+not in a module-scope `Map`.
+
+That distinction is the whole feature. An MV3 service worker is
+terminated after roughly thirty seconds of inactivity and its module
+state goes with it — so with a `Map`, someone who connected Spotify, left
+the tab alone, then clicked Transfer was told their account "isn't
+connected yet" and had to run the entire OAuth flow again. Same reasoning
+as ADR-0015, which moved transfer state there for the same reason.
+
+`session` rather than `local`, deliberately: `storage.session` is
+in-memory and cleared when the browser closes, while `storage.local`
+would write access and refresh tokens to disk in plaintext. Reconnecting
+once per browser session costs less than tokens at rest that nothing
+encrypts (CLAUDE.md §12.1).
+
 ## Testing approach
 
 The shared root `vitest.config.ts` stays on `environment: "node"` for

@@ -6,7 +6,11 @@ import type { DetectedResource, TransferReportSummary } from "../shared/messages
 
 export interface TransferOrchestratorDeps {
   getProvider: (name: string) => MusicProvider | undefined;
-  getSession: (provider: string) => AuthSession | undefined;
+  /**
+   * Async because the session now lives in `chrome.storage.session`
+   * rather than in memory — see `session-store.ts` for why.
+   */
+  getSession: (provider: string) => Promise<AuthSession | undefined>;
   onProgress: (event: TransferProgressEvent) => void;
   onCompleted: (report: TransferReport) => void;
   onFailed: (reason: string) => void;
@@ -49,7 +53,7 @@ export async function runDryRunTransferForResource(
     return;
   }
 
-  const session = deps.getSession(resource.provider);
+  const session = await deps.getSession(resource.provider);
   if (!session) {
     deps.onFailed(
       `${resource.provider} isn't connected yet — connect your account before starting a transfer.`,

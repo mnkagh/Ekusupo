@@ -48,7 +48,7 @@ describe("runDryRunTransferForResource", () => {
       { provider: "spotify", resourceType: "album", resourceId: "album-1" },
       {
         getProvider,
-        getSession: () => session,
+        getSession: async () => session,
         onProgress: vi.fn(),
         onCompleted: vi.fn(),
         onFailed,
@@ -66,7 +66,7 @@ describe("runDryRunTransferForResource", () => {
 
     await runDryRunTransferForResource(playlistResource, {
       getProvider: () => undefined,
-      getSession: () => session,
+      getSession: async () => session,
       onProgress: vi.fn(),
       onCompleted: vi.fn(),
       onFailed,
@@ -81,7 +81,7 @@ describe("runDryRunTransferForResource", () => {
 
     await runDryRunTransferForResource(playlistResource, {
       getProvider: () => provider,
-      getSession: () => undefined,
+      getSession: async () => undefined,
       onProgress: vi.fn(),
       onCompleted: vi.fn(),
       onFailed,
@@ -99,7 +99,7 @@ describe("runDryRunTransferForResource", () => {
 
     await runDryRunTransferForResource(playlistResource, {
       getProvider: () => provider,
-      getSession: () => session,
+      getSession: async () => session,
       onProgress,
       onCompleted,
       onFailed: vi.fn(),
@@ -140,7 +140,7 @@ describe("runDryRunTransferForResource", () => {
 
     await runDryRunTransferForResource(playlistResource, {
       getProvider: () => provider,
-      getSession: () => session,
+      getSession: async () => session,
       onProgress: vi.fn(),
       onCompleted,
       onFailed,

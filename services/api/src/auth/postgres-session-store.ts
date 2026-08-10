@@ -35,4 +35,8 @@ export class PostgresSessionStore implements SessionStore {
   async delete(id: string): Promise<void> {
     await this.db.delete(sessionsTable).where(eq(sessionsTable.id, id));
   }
+
+  async deleteForUser(userId: string): Promise<void> {
+    await this.db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+  }
 }

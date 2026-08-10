@@ -10,6 +10,7 @@
     { "path": "../../packages/core" },
     { "path": "../../packages/providers/apple-music" },
     { "path": "../../packages/providers/spotify" },
+    { "path": "../../packages/providers/upf-file" },
     { "path": "../../packages/providers/youtube-music" },
     { "path": "../../packages/upf" }
   ]

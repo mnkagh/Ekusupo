@@ -28,13 +28,30 @@ export interface TransferJob {
   createdAt: string;
   updatedAt: string;
   report?: TransferReport | null;
+  /** Whether a UPF document can be downloaded for this transfer. */
+  hasUpfDocument?: boolean;
 }
 
 export interface DryRunResult {
   job: TransferJob;
   report: TransferReport;
   usedConnectedAccount?: boolean;
+  /** Present only for a Live Transfer whose destination was UPF. */
+  downloadUrl?: string;
 }
+
+/** One reported problem in an uploaded UPF document — see @ekusupo/upf. */
+export interface UpfProblem {
+  path: string;
+  message: string;
+}
+
+/**
+ * The destination id meaning "a UPF document I can download". Not a
+ * provider — there is no account to connect — so it never appears in the
+ * providers catalog and has to be named here.
+ */
+export const UPF_DESTINATION_ID = "upf";
 
 export interface TransfersClientConfig {
   baseUrl?: string;
@@ -43,6 +60,7 @@ export interface TransfersClientConfig {
 
 interface ErrorBody {
   error?: string;
+  problems?: UpfProblem[];
 }
 
 /**
@@ -86,7 +104,7 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
 
     const body = (await response.json().catch(() => ({}))) as T & ErrorBody;
     if (!response.ok) {
-      throw new ApiError(body.error ?? "Request failed.", response.status);
+      throw new ApiError(body.error ?? "Request failed.", response.status, body.problems ?? []);
     }
     return body;
   }
@@ -105,8 +123,53 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
       });
     },
 
+    /**
+     * Runs a real transfer. `confirm: true` is required by the API's own
+     * schema, not decoration here — a Live Transfer writes to a real
+     * destination and CLAUDE.md §9.3 requires explicit confirmation for
+     * exactly that. Resolves for a failed transfer too; check
+     * `job.status`.
+     */
+    liveTransfer(sourcePlaylistId: string, destinationProvider: string): Promise<DryRunResult> {
+      return request("/transfers/live", {
+        method: "POST",
+        body: JSON.stringify({ sourcePlaylistId, destinationProvider, confirm: true }),
+      });
+    },
+
+    /**
+     * Rejects with an `ApiError` carrying `problems` when the document is
+     * not valid UPF, so the caller can list every fault rather than
+     * showing one generic message.
+     */
+    importUpf(
+      document: unknown,
+      destinationProvider: string,
+      playlistId?: string,
+    ): Promise<DryRunResult> {
+      return request("/transfers/import-upf", {
+        method: "POST",
+        body: JSON.stringify({
+          document,
+          destinationProvider,
+          confirm: true,
+          ...(playlistId ? { playlistId } : {}),
+        }),
+      });
+    },
+
     listTransfers(): Promise<{ transfers: TransferJob[] }> {
       return request("/transfers");
+    },
+
+    /**
+     * A URL to navigate to or put in an `<a download>`, never something
+     * to `fetch()` — the response carries a `Content-Disposition`
+     * attachment header, which only means anything to the browser's own
+     * download machinery.
+     */
+    upfDownloadUrl(jobId: string): string {
+      return `${baseUrl}/transfers/${encodeURIComponent(jobId)}/upf`;
     },
   };
 }

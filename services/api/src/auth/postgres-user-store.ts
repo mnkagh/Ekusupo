@@ -42,4 +42,21 @@ export class PostgresUserStore implements UserStore {
     const [row] = await this.db.select().from(usersTable).where(eq(usersTable.id, id));
     return row ? toUser(row) : undefined;
   }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, id));
+  }
+
+  /**
+   * One statement, because every other table referencing `users.id`
+   * declares `ON DELETE CASCADE` (db/schema.ts): sessions, provider
+   * connections — encrypted tokens and all — and transfer jobs with their
+   * reports and UPF exports all go with it. Deleting them by hand here
+   * would be a second, weaker copy of a rule the database already
+   * enforces, and one that could silently fall out of step with a new
+   * table.
+   */
+  async delete(id: string): Promise<void> {
+    await this.db.delete(usersTable).where(eq(usersTable.id, id));
+  }
 }

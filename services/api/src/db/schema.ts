@@ -1,6 +1,7 @@
 import { boolean, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 import type { TransferReport } from "@ekusupo/core";
+import type { UpfDocument } from "@ekusupo/upf";
 
 /**
  * The real schema behind `UserStore`/`SessionStore` (ADR-0022) — see
@@ -48,6 +49,13 @@ export const providerConnectionsTable = pgTable(
  * (`@ekusupo/core`) only returns a `TransferReport` once it resolves, and
  * the job row is created up front so its live status is queryable while
  * still running.
+ *
+ * `upfDocument` is null for every job except a Live Transfer whose
+ * destination was UPF: that transfer's whole output *is* the document, so
+ * it lives with the job rather than on a disk the database knows nothing
+ * about. Keeping it here means `ON DELETE CASCADE` disposes of it with
+ * the user, and there is one thing to back up rather than two
+ * (ADR-0032).
  */
 export const transferJobsTable = pgTable("transfer_jobs", {
   id: text("id").primaryKey(),
@@ -60,6 +68,7 @@ export const transferJobsTable = pgTable("transfer_jobs", {
   sourcePlaylistId: text("source_playlist_id").notNull(),
   dryRun: boolean("dry_run").notNull(),
   report: jsonb("report").$type<TransferReport>(),
+  upfDocument: jsonb("upf_document").$type<UpfDocument>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });

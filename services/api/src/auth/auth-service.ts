@@ -81,6 +81,53 @@ export class AuthService {
     await this.sessionStore.delete(sessionId);
   }
 
+  /**
+   * Requires the current password even though the caller is already
+   * authenticated: an unattended session is the exact situation a
+   * password change needs to defend against, and without this check
+   * anyone at the keyboard could lock the owner out.
+   *
+   * Every existing session is invalidated and a fresh one returned, so
+   * the change signs out other devices without signing out the person
+   * making it. Whoever knew the old password may still hold a live
+   * session; leaving those standing would make the change decorative.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthResult> {
+    const user = await this.userStore.findById(userId);
+    if (!user) throw new AuthError("That account no longer exists.");
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+      throw new AuthError("That is not your current password.");
+    }
+    if (newPassword.length < 8) throw new AuthError("Password must be at least 8 characters.");
+    if (newPassword === currentPassword) {
+      throw new AuthError("The new password must be different from the current one.");
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await this.userStore.updatePassword(userId, passwordHash);
+    await this.sessionStore.deleteForUser(userId);
+
+    return this.createSession({ ...user, passwordHash });
+  }
+
+  /**
+   * Irreversible, so it asks for the password too (CLAUDE.md §9.3, §21.2).
+   * The store's cascade takes sessions, provider connections — encrypted
+   * tokens and all — and transfer history with it.
+   */
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await this.userStore.findById(userId);
+    if (!user) throw new AuthError("That account no longer exists.");
+    if (!(await verifyPassword(password, user.passwordHash))) {
+      throw new AuthError("That is not your password.");
+    }
+    await this.userStore.delete(userId);
+  }
+
   async getUserForSession(sessionId: string): Promise<User | undefined> {
     const session = await this.sessionStore.get(sessionId);
     if (!session) return undefined;

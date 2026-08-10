@@ -1,4 +1,6 @@
 import type { TransferJob, TransferReport } from "@ekusupo/core";
+import { UPF_FORMAT_NAME, UPF_FORMAT_VERSION } from "@ekusupo/upf";
+import type { UpfDocument } from "@ekusupo/upf";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -108,5 +110,50 @@ describe("PostgresTransferJobStore", () => {
     await db.delete(usersTable).where(eq(usersTable.id, USER_A));
 
     await expect(storeA.get("transfer-1")).resolves.toBeUndefined();
+  });
+
+  describe("UPF exports", () => {
+    const document: UpfDocument = {
+      format: UPF_FORMAT_NAME,
+      version: UPF_FORMAT_VERSION,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      playlists: [{ id: "p1", title: "Backup", items: [] }],
+    };
+
+    it("stores and reads back an exported document", async () => {
+      await storeA.create(makeJob());
+      await storeA.saveUpfDocument("transfer-1", document);
+
+      await expect(storeA.findUpfDocument("transfer-1")).resolves.toEqual(document);
+    });
+
+    it("does not let one user read another user's export", async () => {
+      await storeA.create(makeJob());
+      await storeA.saveUpfDocument("transfer-1", document);
+
+      await expect(storeB.findUpfDocument("transfer-1")).resolves.toBeUndefined();
+    });
+
+    it("reports whether an export exists without carrying the document in a list", async () => {
+      await storeA.create(makeJob({ id: "transfer-1" }));
+      await storeA.create(makeJob({ id: "transfer-2" }));
+      await storeA.saveUpfDocument("transfer-2", document);
+
+      const jobs = await storeA.listForUser();
+      const byId = Object.fromEntries(jobs.map((job) => [job.id, job]));
+      expect(byId["transfer-1"]?.hasUpfDocument).toBe(false);
+      expect(byId["transfer-2"]?.hasUpfDocument).toBe(true);
+      // The flag exists precisely so the document itself stays out of a
+      // list response — a hundred jobs must not mean a hundred libraries.
+      expect(byId["transfer-2"]).not.toHaveProperty("upfDocument");
+    });
+
+    it("disposes of an export with the user that owns it (cascade)", async () => {
+      await storeA.create(makeJob());
+      await storeA.saveUpfDocument("transfer-1", document);
+      await db.delete(usersTable).where(eq(usersTable.id, USER_A));
+
+      await expect(storeA.findUpfDocument("transfer-1")).resolves.toBeUndefined();
+    });
   });
 });

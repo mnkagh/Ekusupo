@@ -49,12 +49,18 @@ const SPOTIFY_SCOPES = [
 ].join(" ");
 
 /**
- * Read-only, and only what is actually used. `youtube.readonly` alone
- * would block playlist creation later, but requesting write access the
- * product cannot yet perform would violate least privilege (CLAUDE.md
- * §12.2) — the scope widens when Live Transfer ships, not before.
+ * Widened from `youtube.readonly` now that Live Transfer genuinely ships
+ * (ADR-0032) — exactly the condition ADR-0029 set for widening it, and
+ * not a moment earlier. `youtube` is the narrowest scope Google offers
+ * that permits `playlists.insert` and `playlistItems.insert`; there is no
+ * playlist-only write scope to request instead.
+ *
+ * Anyone who connected YouTube Music before this change holds a
+ * read-only token and must reconnect before it can be a destination.
+ * Google will refuse the write with a 403, which the transfer report
+ * surfaces rather than swallowing.
  */
-const YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"].join(" ");
+const YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube"].join(" ");
 
 export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
   {

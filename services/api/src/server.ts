@@ -15,6 +15,7 @@ import { PostgresProviderConnectionStore } from "./providers/postgres-provider-c
 import type { ProviderConnectionStore } from "./providers/provider-connection-store.js";
 import type { ProviderCredentials } from "./providers/provider-registry.js";
 import type { ConnectRoutesDeps } from "./routes/connect-routes.js";
+import { registerAccountRoutes } from "./routes/account-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import type { ProviderRoutesConfig, ProviderRoutesDeps } from "./routes/provider-routes.js";
 import { registerConnectRoutes } from "./routes/connect-routes.js";
@@ -115,7 +116,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     spotifyClientId: options.providerRoutesConfig?.spotifyClientId,
     spotifyClientSecret: options.providerRoutesConfig?.spotifyClientSecret,
     createSpotifyAppSessionImpl: options.createSpotifyAppSessionImpl,
+    // The same map the connect routes use, so a destination other than
+    // Spotify can be constructed from the credentials already configured.
+    providerCredentials: options.providerCredentials,
   });
+
+  registerAccountRoutes(app, { authService, providerConnectionStore, db });
 
   return app;
 }

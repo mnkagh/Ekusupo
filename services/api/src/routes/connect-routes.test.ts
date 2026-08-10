@@ -129,7 +129,7 @@ describe("GET /providers/:provider/connect", () => {
     expect(response.cookies.find((c) => c.name === "ekusupo_oauth_state")).toBeDefined();
   });
 
-  it("requests read-only YouTube scope, not write", async () => {
+  it("requests the narrowest YouTube scope that permits the writes it performs", async () => {
     app = await buildServer({ providerCredentials: credentials });
     const cookie = await signUpAndGetCookie();
 
@@ -139,10 +139,16 @@ describe("GET /providers/:provider/connect", () => {
       cookies: { ekusupo_session: cookie },
     });
 
-    // Least privilege (CLAUDE.md §12.2): the product cannot write to
-    // YouTube yet, so it must not ask for permission to.
-    expect(response.headers.location as string).toContain("youtube.readonly");
-    expect(response.headers.location as string).not.toContain("youtube.force-ssl");
+    const location = response.headers.location as string;
+
+    // Least privilege (CLAUDE.md §12.2). YouTube Music became a real
+    // Live Transfer destination in ADR-0032, which is the condition
+    // ADR-0029 set for widening this beyond `youtube.readonly`. Google
+    // offers no playlist-only write scope, so `youtube` is the floor —
+    // but the still-broader ones must stay unrequested.
+    expect(decodeURIComponent(location)).toContain("https://www.googleapis.com/auth/youtube&");
+    expect(location).not.toContain("youtube.force-ssl");
+    expect(location).not.toContain("youtubepartner");
   });
 
   it("connects a server-token provider without any redirect to the provider", async () => {

@@ -54,4 +54,15 @@ export async function ensureSchema(db: Database): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL
     )
   `);
+
+  // `CREATE TABLE IF NOT EXISTS` above does nothing to a table that
+  // already exists, so a column added after the fact needs its own
+  // statement — otherwise anyone with a database from before this change
+  // keeps a table without it. Still not a migrations framework: additive,
+  // idempotent, and safe to run on every boot. The moment a change is
+  // *not* expressible this way (a rename, a backfill, a narrowing), that
+  // is the signal to adopt drizzle-kit rather than to get clever here.
+  await db.execute(sql`
+    ALTER TABLE transfer_jobs ADD COLUMN IF NOT EXISTS upf_document JSONB
+  `);
 }

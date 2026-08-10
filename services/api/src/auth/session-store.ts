@@ -9,6 +9,12 @@ export interface SessionStore {
   create(session: Session): Promise<void>;
   get(id: string): Promise<Session | undefined>;
   delete(id: string): Promise<void>;
+  /**
+   * Signs out every device. Needed by a password change: whoever knew the
+   * old password may still hold a live session, and leaving those
+   * standing would make the change decorative.
+   */
+  deleteForUser(userId: string): Promise<void>;
 }
 
 export class InMemorySessionStore implements SessionStore {
@@ -24,5 +30,11 @@ export class InMemorySessionStore implements SessionStore {
 
   async delete(id: string): Promise<void> {
     this.sessions.delete(id);
+  }
+
+  async deleteForUser(userId: string): Promise<void> {
+    for (const [id, session] of this.sessions) {
+      if (session.userId === userId) this.sessions.delete(id);
+    }
   }
 }

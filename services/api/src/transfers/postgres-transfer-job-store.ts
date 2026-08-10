@@ -1,11 +1,19 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { TransferJob, TransferJobStore, TransferReport } from "@ekusupo/core";
+import type { UpfDocument } from "@ekusupo/upf";
 
 import type { Database } from "../db/client.js";
 import { transferJobsTable } from "../db/schema.js";
 
 export interface StoredTransferJob extends TransferJob {
   report: TransferReport | null;
+  /**
+   * Whether a downloadable UPF document exists, not the document itself —
+   * a list of a hundred jobs would otherwise carry a hundred full
+   * playlist libraries to a client that only wanted to draw a row per
+   * transfer. Fetch the document with `findUpfDocument`.
+   */
+  hasUpfDocument: boolean;
 }
 
 function toJob(row: typeof transferJobsTable.$inferSelect): StoredTransferJob {
@@ -19,6 +27,7 @@ function toJob(row: typeof transferJobsTable.$inferSelect): StoredTransferJob {
     updatedAt: row.updatedAt.toISOString(),
     dryRun: row.dryRun,
     report: row.report ?? null,
+    hasUpfDocument: row.upfDocument !== null,
   };
 }
 
@@ -78,6 +87,26 @@ export class PostgresTransferJobStore implements TransferJobStore {
       .update(transferJobsTable)
       .set({ report })
       .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
+  }
+
+  async saveUpfDocument(id: string, document: UpfDocument): Promise<void> {
+    await this.db
+      .update(transferJobsTable)
+      .set({ upfDocument: document })
+      .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
+  }
+
+  /**
+   * `undefined` covers both "no such job" and "not this user's job" — the
+   * same deliberate conflation `findByIdForUser` makes, so another user's
+   * transfer id is indistinguishable from one that never existed.
+   */
+  async findUpfDocument(id: string): Promise<UpfDocument | undefined> {
+    const [row] = await this.db
+      .select({ document: transferJobsTable.upfDocument })
+      .from(transferJobsTable)
+      .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
+    return row?.document ?? undefined;
   }
 
   async listForUser(): Promise<StoredTransferJob[]> {

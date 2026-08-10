@@ -12,6 +12,13 @@ export interface UserStore {
   create(user: User): Promise<void>;
   findByEmail(email: string): Promise<User | undefined>;
   findById(id: string): Promise<User | undefined>;
+  updatePassword(id: string, passwordHash: string): Promise<void>;
+  /**
+   * Removes the account itself. Sessions, provider connections and
+   * transfers go with it via `ON DELETE CASCADE` in the real store — see
+   * `db/schema.ts`. CLAUDE.md §21.2 requires this be possible at all.
+   */
+  delete(id: string): Promise<void>;
 }
 
 export class InMemoryUserStore implements UserStore {
@@ -29,5 +36,20 @@ export class InMemoryUserStore implements UserStore {
 
   async findById(id: string): Promise<User | undefined> {
     return this.byId.get(id);
+  }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    const user = this.byId.get(id);
+    if (!user) return;
+    const updated: User = { ...user, passwordHash };
+    this.byId.set(id, updated);
+    this.byEmail.set(user.email.toLowerCase(), updated);
+  }
+
+  async delete(id: string): Promise<void> {
+    const user = this.byId.get(id);
+    if (!user) return;
+    this.byId.delete(id);
+    this.byEmail.delete(user.email.toLowerCase());
   }
 }

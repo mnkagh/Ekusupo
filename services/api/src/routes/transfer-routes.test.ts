@@ -60,6 +60,44 @@ async function signUpAndGetCookie(): Promise<string> {
   return response.cookies.find((c) => c.name === "ekusupo_session")?.value ?? "";
 }
 
+const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
+
+/**
+ * Transfers run in the background now (ADR-0033), so a route returns 202
+ * with a job id and the result arrives later. Polling here is what a real
+ * client does; there is no callback to await.
+ */
+async function waitForTransfer(sessionCookie: string, jobId: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const response = await app.inject({
+      method: "GET",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    const transfer = response.json().transfer as { status: string };
+    if (TERMINAL.has(transfer.status)) return transfer as Record<string, unknown>;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Transfer ${jobId} never reached a terminal status.`);
+}
+
+/** Starts a transfer and waits for it, the way the dashboard does. */
+async function runToCompletion(
+  sessionCookie: string,
+  url: string,
+  payload: Record<string, unknown>,
+) {
+  const started = await app.inject({
+    method: "POST",
+    url,
+    payload,
+    cookies: { ekusupo_session: sessionCookie },
+  });
+  if (started.statusCode !== 202) return { started, transfer: undefined };
+  const jobId = started.json().job.id as string;
+  return { started, transfer: await waitForTransfer(sessionCookie, jobId) };
+}
+
 async function connectSpotify(sessionCookie: string): Promise<void> {
   const connect = await app.inject({
     method: "GET",
@@ -177,22 +215,22 @@ describe("POST /transfers/dry-run", () => {
     const sessionCookie = await signUpAndGetCookie();
     await connectSpotify(sessionCookie);
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/dry-run",
-      payload: { sourcePlaylistId: "playlist-1" },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "playlist-1",
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.job.dryRun).toBe(true);
-    expect(body.job.status).toBe("partial");
-    expect(body.report.totalItems).toBe(1);
+    // 202, not 200: the work was accepted, not finished (ADR-0033).
+    expect(started.statusCode).toBe(202);
+    expect(started.json().job.dryRun).toBe(true);
+    expect(started.json().pollUrl).toBe(`/transfers/${started.json().job.id}`);
+
+    expect(transfer?.status).toBe("partial");
+    const report = transfer?.report as { totalItems: number; skippedItems: number };
+    expect(report.totalItems).toBe(1);
     // Spotify's real capabilities have no tracks.search, so used as both
     // source and destination it can plan but never match — same real
     // behavior packages/core/src/run-transfer.test.ts already proves.
-    expect(body.report.skippedItems).toBe(1);
+    expect(report.skippedItems).toBe(1);
 
     const list = await app.inject({
       method: "GET",
@@ -200,7 +238,10 @@ describe("POST /transfers/dry-run", () => {
       cookies: { ekusupo_session: sessionCookie },
     });
     expect(list.json().transfers).toHaveLength(1);
-    expect(list.json().transfers[0]).toMatchObject({ id: body.job.id, status: "partial" });
+    expect(list.json().transfers[0]).toMatchObject({
+      id: started.json().job.id,
+      status: "partial",
+    });
     expect(list.json().transfers[0].report.totalItems).toBe(1);
   });
 
@@ -213,24 +254,22 @@ describe("POST /transfers/dry-run", () => {
     const sessionCookie = await signUpAndGetCookie();
     await connectSpotify(sessionCookie);
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/dry-run",
-      payload: { sourcePlaylistId: "does-not-exist" },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "does-not-exist",
     });
 
-    // 200, not 502: the Dry Run itself ran fine — its *outcome* was a
-    // failure, and `runDryRunTransfer` reports that rather than throwing
-    // (packages/core/src/run-transfer.ts). The caller gets a report
-    // explaining why, which an opaque 502 would have thrown away. The
-    // route's 502 path still guards genuinely unexpected errors.
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.job.status).toBe("failed");
-    expect(body.report.providerLimitationsEncountered).toEqual([
-      "Could not read the source playlist: playlist not found",
-    ]);
+    // 202, not 502: the Dry Run was accepted and ran — its *outcome* was
+    // a failure, and `runDryRunTransfer` reports that rather than
+    // throwing (packages/core/src/run-transfer.ts). The caller polls and
+    // gets a report explaining why, which an opaque 502 would have thrown
+    // away. The route's 502 path still guards a job that cannot even be
+    // recorded.
+    expect(started.statusCode).toBe(202);
+    expect(transfer?.status).toBe("failed");
+    expect(
+      (transfer?.report as { providerLimitationsEncountered: string[] })
+        .providerLimitationsEncountered,
+    ).toEqual(["Could not read the source playlist: playlist not found"]);
   });
 });
 
@@ -270,17 +309,13 @@ describe("POST /transfers/dry-run — public playlists without connecting", () =
     const sessionCookie = await signUpAndGetCookie();
 
     // Note: no connectSpotify() call anywhere in this test.
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/dry-run",
-      payload: { sourcePlaylistId: "public-1" },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "public-1",
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.usedConnectedAccount).toBe(false);
-    expect(body.report.totalItems).toBe(1);
+    expect(started.statusCode).toBe(202);
+    expect(started.json().usedConnectedAccount).toBe(false);
+    expect((transfer?.report as { totalItems: number }).totalItems).toBe(1);
   });
 
   it("tells the user to connect when the playlist isn't public", async () => {
@@ -291,22 +326,26 @@ describe("POST /transfers/dry-run — public playlists without connecting", () =
     });
     const sessionCookie = await signUpAndGetCookie();
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/dry-run",
-      payload: { sourcePlaylistId: "someones-private-playlist" },
-      cookies: { ekusupo_session: sessionCookie },
+    const { transfer } = await runToCompletion(sessionCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "someones-private-playlist",
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.job.status).toBe("failed");
+    expect(transfer?.status).toBe("failed");
     // The actionable half matters more than the technical reason: an
     // anonymous token cannot tell "private" from "missing", so the
-    // message must not assert a wrong cause.
-    expect(body.report.userActionsRequired).toContainEqual(
-      expect.stringContaining("Connect your Spotify account"),
-    );
+    // message must not assert a wrong cause. It is appended after the
+    // run finishes, so this also proves the stored report is the one the
+    // route amended rather than the engine's original.
+    await expect
+      .poll(async () => {
+        const latest = await app.inject({
+          method: "GET",
+          url: `/transfers/${transfer?.id as string}`,
+          cookies: { ekusupo_session: sessionCookie },
+        });
+        return latest.json().transfer.report.userActionsRequired as string[];
+      })
+      .toContainEqual(expect.stringContaining("Connect your Spotify account"));
   });
 
   it("prefers a connected account over the anonymous token", async () => {
@@ -327,6 +366,7 @@ describe("POST /transfers/dry-run — public playlists without connecting", () =
     });
 
     expect(response.json().usedConnectedAccount).toBe(true);
+    await waitForTransfer(sessionCookie, response.json().job.id as string);
   });
 
   it("still refuses when the server has no Spotify credentials at all", async () => {

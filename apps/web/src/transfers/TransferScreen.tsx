@@ -1,18 +1,14 @@
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { FormEvent } from "react";
 
 import { ApiError } from "../api/errors.js";
 import { providersClient } from "../api/providers-client.js";
 import type { CatalogProvider } from "../api/providers-client.js";
 import { UPF_DESTINATION_ID, extractPlaylistId, transfersClient } from "../api/transfers-client.js";
-import type { DryRunResult, TransferJob } from "../api/transfers-client.js";
+import type { TransferJob } from "../api/transfers-client.js";
+import { TransferProgressView } from "./TransferProgressView.js";
 import { TransferReportView } from "./TransferReportView.js";
-
-type RunState =
-  | { status: "idle" }
-  | { status: "running"; mode: Mode }
-  | { status: "done"; result: DryRunResult; mode: Mode }
-  | { status: "error"; message: string };
+import { useTransferJob } from "./useTransferJob.js";
 
 type Mode = "preview" | "live";
 
@@ -45,22 +41,24 @@ export function TransferScreen() {
   const [input, setInput] = useState("");
   const [destination, setDestination] = useState(UPF_DESTINATION_ID);
   const [destinations, setDestinations] = useState<CatalogProvider[]>([]);
-  const [run, setRun] = useState<RunState>({ status: "idle" });
   const [history, setHistory] = useState<TransferJob[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState(false);
+  const [mode, setMode] = useState<Mode>("preview");
   const inputId = useId();
   const destinationId = useId();
 
-  const loadHistory = () => {
+  const loadHistory = useCallback(() => {
     void transfersClient
       .listTransfers()
       .then(({ transfers }) => setHistory(transfers))
       // A failed history fetch must not blank the screen — the transfer
       // form above it still works without it.
       .catch(() => setHistory([]));
-  };
+  }, []);
 
-  useEffect(loadHistory, []);
+  const run = useTransferJob(loadHistory);
+
+  useEffect(loadHistory, [loadHistory]);
 
   useEffect(() => {
     // Only providers the server can actually construct are offered. A
@@ -73,28 +71,25 @@ export function TransferScreen() {
       .catch(() => setDestinations([]));
   }, []);
 
-  const start = (mode: Mode) => {
+  const start = (next: Mode) => {
     const playlistId = extractPlaylistId(input);
     if (!playlistId) return;
 
     setPendingConfirm(false);
-    setRun({ status: "running", mode });
+    setMode(next);
+    run.starting();
 
     const request =
-      mode === "preview"
+      next === "preview"
         ? transfersClient.dryRun(playlistId)
         : transfersClient.liveTransfer(playlistId, destination);
 
+    // Resolves when the job exists, not when it finishes — the hook
+    // watches it from there (ADR-0033).
     void request
-      .then((result) => {
-        setRun({ status: "done", result, mode });
-        loadHistory();
-      })
+      .then((started) => run.watch(started.job))
       .catch((error: unknown) => {
-        setRun({
-          status: "error",
-          message: error instanceof ApiError ? error.message : "Something went wrong.",
-        });
+        run.fail(error instanceof ApiError ? error.message : "Something went wrong.");
       });
   };
 
@@ -108,7 +103,7 @@ export function TransferScreen() {
       ? UPF_DESTINATION.displayName
       : (destinations.find((entry) => entry.id === destination)?.displayName ?? destination);
 
-  const busy = run.status === "running";
+  const busy = run.state.status === "starting" || run.state.status === "running";
   const canRun = Boolean(input.trim()) && !busy;
 
   return (
@@ -137,7 +132,7 @@ export function TransferScreen() {
               onChange={(event) => setInput(event.target.value)}
             />
             <button type="submit" className="btn btn--ghost" disabled={!canRun}>
-              {busy && run.mode === "preview" ? "Running…" : "Preview"}
+              {busy && mode === "preview" ? "Running…" : "Preview"}
             </button>
           </div>
 
@@ -164,7 +159,7 @@ export function TransferScreen() {
               disabled={!canRun}
               onClick={() => setPendingConfirm(true)}
             >
-              {busy && run.mode === "live" ? "Transferring…" : "Transfer"}
+              {busy && mode === "live" ? "Transferring…" : "Transfer"}
             </button>
           </div>
 
@@ -194,28 +189,32 @@ export function TransferScreen() {
           </div>
         )}
 
-        {run.status === "running" && (
+        {run.state.status === "starting" && (
           <p className="loading">
             <span className="loading__bar" aria-hidden="true" />
-            {run.mode === "preview" ? "Reading the playlist" : "Transferring"}
+            Starting
           </p>
         )}
 
-        {run.status === "error" && (
+        {run.state.status === "running" && (
+          <TransferProgressView job={run.state.job} onCancel={run.cancel} />
+        )}
+
+        {run.state.status === "error" && (
           <p role="alert" className="notice notice--error">
-            {run.message}
+            {run.state.message}
           </p>
         )}
 
-        {run.status === "done" && (
+        {run.state.status === "finished" && run.state.job.report && (
           <>
-            <TransferReportView status={run.result.job.status} report={run.result.report} />
-            {run.result.downloadUrl && (
+            <TransferReportView status={run.state.job.status} report={run.state.job.report} />
+            {run.state.job.hasUpfDocument && (
               <p className="notice notice--ok">
                 <a
                   className="btn btn--connect"
-                  href={transfersClient.upfDownloadUrl(run.result.job.id)}
-                  download={`${run.result.job.id}.upf.json`}
+                  href={transfersClient.upfDownloadUrl(run.state.job.id)}
+                  download={`${run.state.job.id}.upf.json`}
                 >
                   Download UPF file
                 </a>

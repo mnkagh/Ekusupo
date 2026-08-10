@@ -1,5 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
-import type { TransferJob, TransferJobStore, TransferReport } from "@ekusupo/core";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import type {
+  TransferJob,
+  TransferJobStore,
+  TransferProgressEvent,
+  TransferReport,
+} from "@ekusupo/core";
 import type { UpfDocument } from "@ekusupo/upf";
 
 import type { Database } from "../db/client.js";
@@ -7,6 +12,8 @@ import { transferJobsTable } from "../db/schema.js";
 
 export interface StoredTransferJob extends TransferJob {
   report: TransferReport | null;
+  /** How far a still-running job has got. Null before it starts moving. */
+  progress: TransferProgressEvent | null;
   /**
    * Whether a downloadable UPF document exists, not the document itself —
    * a list of a hundred jobs would otherwise carry a hundred full
@@ -27,6 +34,7 @@ function toJob(row: typeof transferJobsTable.$inferSelect): StoredTransferJob {
     updatedAt: row.updatedAt.toISOString(),
     dryRun: row.dryRun,
     report: row.report ?? null,
+    progress: row.progress ?? null,
     hasUpfDocument: row.upfDocument !== null,
   };
 }
@@ -87,6 +95,38 @@ export class PostgresTransferJobStore implements TransferJobStore {
       .update(transferJobsTable)
       .set({ report })
       .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
+  }
+
+  async saveProgress(id: string, progress: TransferProgressEvent): Promise<void> {
+    await this.db
+      .update(transferJobsTable)
+      .set({ progress })
+      .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
+  }
+
+  /**
+   * Cancellation is cooperative: the engine checks the stored status
+   * between tracks and stops when it reads `cancelled`
+   * (`packages/core/src/run-transfer.ts`). Writing the status here is
+   * therefore the whole mechanism — there is no signal to deliver and no
+   * handle to abort, which is why this works across a job the request
+   * that started it has long since stopped waiting for.
+   *
+   * Only a job still in flight can be cancelled; returns whether one was.
+   */
+  async cancel(id: string): Promise<boolean> {
+    const rows = await this.db
+      .update(transferJobsTable)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(
+        and(
+          eq(transferJobsTable.id, id),
+          eq(transferJobsTable.userId, this.userId),
+          inArray(transferJobsTable.status, ["pending", "running"]),
+        ),
+      )
+      .returning({ id: transferJobsTable.id });
+    return rows.length > 0;
   }
 
   async saveUpfDocument(id: string, document: UpfDocument): Promise<void> {

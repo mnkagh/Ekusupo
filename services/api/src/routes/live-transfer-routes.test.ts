@@ -90,6 +90,43 @@ async function connectSpotify(sessionCookie: string): Promise<void> {
   });
 }
 
+const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
+
+/**
+ * Transfers run in the background now (ADR-0033): a route answers 202
+ * with a job id and the result arrives later. Polling is what a real
+ * client does; there is no callback to await.
+ */
+async function waitForTransfer(sessionCookie: string, jobId: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const response = await app.inject({
+      method: "GET",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    const transfer = response.json().transfer as Record<string, unknown>;
+    if (TERMINAL.has(transfer.status as string)) return transfer;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Transfer ${jobId} never reached a terminal status.`);
+}
+
+async function runToCompletion(
+  sessionCookie: string,
+  url: string,
+  payload: Record<string, unknown>,
+) {
+  const started = await app.inject({
+    method: "POST",
+    url,
+    payload,
+    cookies: { ekusupo_session: sessionCookie },
+  });
+  if (started.statusCode !== 202) return { started, transfer: undefined };
+  const jobId = started.json().job.id as string;
+  return { started, transfer: await waitForTransfer(sessionCookie, jobId) };
+}
+
 async function buildConnectedApp(): Promise<string> {
   app = await buildServer({
     providerRoutesConfig: spotifyConfig,
@@ -144,30 +181,31 @@ describe("POST /transfers/live", () => {
   it("really writes the source playlist into a downloadable UPF document", async () => {
     const sessionCookie = await buildConnectedApp();
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/live",
-      payload: { sourcePlaylistId: "playlist-1", destinationProvider: "upf", confirm: true },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/live", {
+      sourcePlaylistId: "playlist-1",
+      destinationProvider: "upf",
+      confirm: true,
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.job.dryRun).toBe(false);
-    expect(body.job.status).toBe("completed");
-    expect(body.report.createdItems).toBe(2);
-    // Write-through, not matching — a file has no catalogue (ADR-0018).
-    expect(body.report.matchedItems).toBe(0);
-    expect(body.downloadUrl).toBe(`/transfers/${body.job.id}/upf`);
+    expect(started.statusCode).toBe(202);
+    expect(started.json().job.dryRun).toBe(false);
 
+    expect(transfer?.status).toBe("completed");
+    const report = transfer?.report as { createdItems: number; matchedItems: number };
+    expect(report.createdItems).toBe(2);
+    // Write-through, not matching — a file has no catalogue (ADR-0018).
+    expect(report.matchedItems).toBe(0);
+    expect(transfer?.hasUpfDocument).toBe(true);
+
+    const jobId = started.json().job.id as string;
     const download = await app.inject({
       method: "GET",
-      url: body.downloadUrl as string,
+      url: `/transfers/${jobId}/upf`,
       cookies: { ekusupo_session: sessionCookie },
     });
 
     expect(download.statusCode).toBe(200);
-    expect(download.headers["content-disposition"]).toContain(`${body.job.id}.upf.json`);
+    expect(download.headers["content-disposition"]).toContain(`${jobId}.upf.json`);
 
     const document = download.json() as UpfDocument;
     expect(document.format).toBe(UPF_FORMAT_NAME);
@@ -275,17 +313,64 @@ describe("POST /transfers/live", () => {
   it("records a failed job with a reason when the source cannot be read", async () => {
     const sessionCookie = await buildConnectedApp();
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/live",
-      payload: { sourcePlaylistId: "does-not-exist", destinationProvider: "upf", confirm: true },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/live", {
+      sourcePlaylistId: "does-not-exist",
+      destinationProvider: "upf",
+      confirm: true,
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().job.status).toBe("failed");
-    // No document was produced, so no download is offered.
-    expect(response.json().downloadUrl).toBeUndefined();
+    expect(started.statusCode).toBe(202);
+    expect(transfer?.status).toBe("failed");
+    // No document was produced, so none is offered.
+    expect(transfer?.hasUpfDocument).toBe(false);
+  });
+});
+
+describe("POST /transfers/:id/cancel", () => {
+  it("requires authentication", async () => {
+    app = await buildServer();
+    const response = await app.inject({ method: "POST", url: "/transfers/anything/cancel" });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("404s for a transfer that is not the caller's", async () => {
+    const ownerCookie = await buildConnectedApp();
+    const run = await app.inject({
+      method: "POST",
+      url: "/transfers/live",
+      payload: { sourcePlaylistId: "playlist-1", destinationProvider: "upf", confirm: true },
+      cookies: { ekusupo_session: ownerCookie },
+    });
+    const jobId = run.json().job.id as string;
+
+    const otherCookie = await signUpAndGetCookie();
+    const stolen = await app.inject({
+      method: "POST",
+      url: `/transfers/${jobId}/cancel`,
+      cookies: { ekusupo_session: otherCookie },
+    });
+    expect(stolen.statusCode).toBe(404);
+
+    await waitForTransfer(ownerCookie, jobId);
+  });
+
+  it("409s when the transfer already finished", async () => {
+    const sessionCookie = await buildConnectedApp();
+    const { started } = await runToCompletion(sessionCookie, "/transfers/live", {
+      sourcePlaylistId: "playlist-1",
+      destinationProvider: "upf",
+      confirm: true,
+    });
+
+    // Not an error the caller can fix by retrying, and not a 404 either:
+    // the transfer exists, it is just past the point of stopping.
+    const response = await app.inject({
+      method: "POST",
+      url: `/transfers/${started.json().job.id as string}/cancel`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toMatch(/already completed/);
   });
 });
 
@@ -305,6 +390,7 @@ describe("GET /transfers/:id/upf", () => {
       cookies: { ekusupo_session: ownerCookie },
     });
     const jobId = run.json().job.id as string;
+    await waitForTransfer(ownerCookie, jobId);
 
     const missing = await app.inject({
       method: "GET",
@@ -403,23 +489,22 @@ describe("POST /transfers/import-upf", () => {
     // Round-tripping into UPF is the honest end-to-end proof available
     // without a connected write-capable provider: a real engine run, a
     // real file connector on both ends, a real report.
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/import-upf",
-      payload: { document: validDocument(), destinationProvider: "upf", confirm: true },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/import-upf", {
+      document: validDocument(),
+      destinationProvider: "upf",
+      confirm: true,
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.job.status).toBe("completed");
-    expect(body.job.sourceProvider).toBe("upf-file");
-    expect(body.report.totalItems).toBe(2);
-    expect(body.report.createdItems).toBe(2);
+    expect(started.statusCode).toBe(202);
+    expect(transfer?.status).toBe("completed");
+    expect(transfer?.sourceProvider).toBe("upf-file");
+    const report = transfer?.report as { totalItems: number; createdItems: number };
+    expect(report.totalItems).toBe(2);
+    expect(report.createdItems).toBe(2);
 
     const download = await app.inject({
       method: "GET",
-      url: body.downloadUrl as string,
+      url: `/transfers/${started.json().job.id as string}/upf`,
       cookies: { ekusupo_session: sessionCookie },
     });
     const document = download.json() as UpfDocument;
@@ -441,15 +526,15 @@ describe("POST /transfers/import-upf", () => {
       ],
     };
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/transfers/import-upf",
-      payload: { document, destinationProvider: "upf", playlistId: "second", confirm: true },
-      cookies: { ekusupo_session: sessionCookie },
+    const { started, transfer } = await runToCompletion(sessionCookie, "/transfers/import-upf", {
+      document,
+      destinationProvider: "upf",
+      playlistId: "second",
+      confirm: true,
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().report.totalItems).toBe(2);
+    expect(started.statusCode).toBe(202);
+    expect((transfer?.report as { totalItems: number }).totalItems).toBe(2);
 
     const missing = await app.inject({
       method: "POST",

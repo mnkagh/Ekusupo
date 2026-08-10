@@ -30,20 +30,40 @@ const emptyReport = {
 };
 
 interface StubOptions {
-  run: { body: unknown; status?: number };
+  /** Rejection of the *start* request. Omit for a job that starts fine. */
+  startError?: { body: unknown; status: number };
+  /** What polling reports. Omit to leave the job running. */
+  finished?: Record<string, unknown>;
   transfers?: unknown[];
   catalog?: unknown[];
 }
 
-/** Routes the three endpoints this screen uses; `run` answers both POSTs. */
-function stubApi({ run, transfers = [], catalog = [] }: StubOptions) {
+const STARTED_JOB = { id: "t1", status: "pending", dryRun: true };
+
+/**
+ * Models the real contract: starting a transfer answers **202** with a
+ * pending job, and the outcome only appears once the client polls
+ * `GET /transfers/:id` (ADR-0033). A stub that returned the finished
+ * report straight from the POST would let a component that never polls
+ * pass this suite.
+ */
+function stubApi({ startError, finished, transfers = [], catalog = [] }: StubOptions = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      if (init?.method === "POST") return jsonResponse(run.body, run.status ?? 200);
-      if (url.toString().includes("/providers/catalog"))
-        return jsonResponse({ providers: catalog });
-      if (url.toString().includes("/transfers")) return jsonResponse({ transfers });
+      const href = url.toString();
+
+      if (init?.method === "POST") {
+        if (href.includes("/cancel")) return jsonResponse({ cancelled: true });
+        if (startError) return jsonResponse(startError.body, startError.status);
+        return jsonResponse({ job: STARTED_JOB, pollUrl: "/transfers/t1" }, 202);
+      }
+
+      if (href.includes("/providers/catalog")) return jsonResponse({ providers: catalog });
+      if (/\/transfers\/[^/]+$/.test(href)) {
+        return jsonResponse({ transfer: finished ?? { ...STARTED_JOB, status: "running" } });
+      }
+      if (href.includes("/transfers")) return jsonResponse({ transfers });
       return jsonResponse({});
     }),
   );
@@ -61,7 +81,7 @@ async function typeLink(value: string): Promise<void> {
 
 describe("TransferScreen", () => {
   it("says up front that nothing is written without confirmation", async () => {
-    stubApi({ run: { body: {} } });
+    stubApi();
     render(<TransferScreen />);
 
     // CLAUDE.md §20.2: show what will happen before it happens.
@@ -69,7 +89,7 @@ describe("TransferScreen", () => {
   });
 
   it("cannot run anything with an empty link", async () => {
-    stubApi({ run: { body: {} } });
+    stubApi();
     render(<TransferScreen />);
 
     expect((await screen.findByRole("button", { name: "Preview" })).hasAttribute("disabled")).toBe(
@@ -79,7 +99,7 @@ describe("TransferScreen", () => {
   });
 
   it("extracts the id from a pasted share URL before calling the API", async () => {
-    stubApi({ run: { body: { job: { id: "t1", status: "partial" }, report: emptyReport } } });
+    stubApi({ finished: { ...STARTED_JOB, status: "partial", report: emptyReport } });
     render(<TransferScreen />);
 
     await typeLink("https://open.spotify.com/playlist/abc123?si=xyz");
@@ -95,15 +115,14 @@ describe("TransferScreen", () => {
 
   it("shows the report when a run finishes", async () => {
     stubApi({
-      run: {
-        body: {
-          job: { id: "t1", status: "partial" },
-          report: {
-            ...emptyReport,
-            totalItems: 12,
-            skippedItems: 12,
-            providerLimitationsEncountered: ["Destination provider cannot search tracks"],
-          },
+      finished: {
+        ...STARTED_JOB,
+        status: "partial",
+        report: {
+          ...emptyReport,
+          totalItems: 12,
+          skippedItems: 12,
+          providerLimitationsEncountered: ["Destination provider cannot search tracks"],
         },
       },
     });
@@ -127,13 +146,12 @@ describe("TransferScreen", () => {
 
   it("reports a failed run as a failure, not as a finished empty transfer", async () => {
     stubApi({
-      run: {
-        body: {
-          job: { id: "t1", status: "failed" },
-          report: {
-            ...emptyReport,
-            failureReason: "Could not read the source playlist: playlist not found",
-          },
+      finished: {
+        ...STARTED_JOB,
+        status: "failed",
+        report: {
+          ...emptyReport,
+          failureReason: "Could not read the source playlist: playlist not found",
         },
       },
     });
@@ -150,7 +168,7 @@ describe("TransferScreen", () => {
 
   it("surfaces the server's own message when the API refuses", async () => {
     stubApi({
-      run: { body: { error: "Connect Spotify before starting a transfer." }, status: 400 },
+      startError: { body: { error: "Connect Spotify before starting a transfer." }, status: 400 },
     });
     render(<TransferScreen />);
 
@@ -165,7 +183,6 @@ describe("TransferScreen", () => {
 
   it("lists recent transfers", async () => {
     stubApi({
-      run: { body: {} },
       transfers: [
         {
           id: "t1",
@@ -198,7 +215,7 @@ describe("TransferScreen", () => {
 
 describe("TransferScreen — writing for real", () => {
   it("does not write until the confirmation is accepted", async () => {
-    stubApi({ run: { body: { job: { id: "t1", status: "completed" }, report: emptyReport } } });
+    stubApi({ finished: { ...STARTED_JOB, status: "completed", report: emptyReport } });
     render(<TransferScreen />);
 
     await typeLink("abc123");
@@ -221,7 +238,7 @@ describe("TransferScreen — writing for real", () => {
   });
 
   it("cancelling the confirmation writes nothing", async () => {
-    stubApi({ run: { body: {} } });
+    stubApi();
     render(<TransferScreen />);
 
     await typeLink("abc123");
@@ -234,7 +251,6 @@ describe("TransferScreen — writing for real", () => {
 
   it("names the chosen destination in the confirmation", async () => {
     stubApi({
-      run: { body: {} },
       catalog: [
         { id: "youtube-music", displayName: "YouTube Music", authKind: "oauth2", configured: true },
       ],
@@ -253,7 +269,6 @@ describe("TransferScreen — writing for real", () => {
 
   it("offers only destinations the server says are configured", async () => {
     stubApi({
-      run: { body: {} },
       catalog: [
         { id: "youtube-music", displayName: "YouTube Music", authKind: "oauth2", configured: true },
         {
@@ -279,12 +294,11 @@ describe("TransferScreen — writing for real", () => {
 
   it("offers the exported file for download when one was produced", async () => {
     stubApi({
-      run: {
-        body: {
-          job: { id: "t1", status: "completed" },
-          report: { ...emptyReport, createdItems: 2, totalItems: 2 },
-          downloadUrl: "/transfers/t1/upf",
-        },
+      finished: {
+        ...STARTED_JOB,
+        status: "completed",
+        hasUpfDocument: true,
+        report: { ...emptyReport, createdItems: 2, totalItems: 2 },
       },
     });
     render(<TransferScreen />);
@@ -298,9 +312,56 @@ describe("TransferScreen — writing for real", () => {
     expect(link.getAttribute("download")).toBe("t1.upf.json");
   });
 
+  it("shows live progress while the transfer is still running", async () => {
+    // No `finished`, so polling keeps reporting a running job — which is
+    // exactly the state a long transfer spends its time in.
+    stubApi({
+      finished: {
+        ...STARTED_JOB,
+        status: "running",
+        progress: { step: "matching", processed: 40, total: 120 },
+      },
+    });
+    render(<TransferScreen />);
+
+    await typeLink("abc123");
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    const bar = await screen.findByRole("progressbar", { name: "Transfer progress" });
+    expect(bar.getAttribute("aria-valuenow")).toBe("33");
+    expect(screen.getByText(/Finding each track/)).toBeDefined();
+    expect(screen.getByText(/40 of 120/)).toBeDefined();
+  });
+
+  it("offers to cancel a running transfer, and says so to the server", async () => {
+    stubApi({ finished: { ...STARTED_JOB, status: "running" } });
+    render(<TransferScreen />);
+
+    await typeLink("abc123");
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    fireEvent.click(cancel);
+
+    await waitFor(() => {
+      expect(postCalls().some((call) => call[0].includes("/transfers/t1/cancel"))).toBe(true);
+    });
+  });
+
+  it("says the work continues without the tab open", async () => {
+    stubApi({ finished: { ...STARTED_JOB, status: "running" } });
+    render(<TransferScreen />);
+
+    await typeLink("abc123");
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    // A background job the user does not know is a background job looks
+    // like one they must babysit.
+    expect(await screen.findByText(/keeps running if you close the tab/i)).toBeDefined();
+  });
+
   it("offers a download beside an older transfer that produced one", async () => {
     stubApi({
-      run: { body: {} },
       transfers: [
         {
           id: "t9",

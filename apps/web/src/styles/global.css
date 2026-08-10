@@ -2182,6 +2182,96 @@ input[type="file"].field__input::file-selector-button:hover {
   gap: var(--space-3);
 }
 
+/* ----------------------------------------------------------- progress */
+
+.progress {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.progress__label {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.progress__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.progress__track {
+  position: relative;
+  height: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-void);
+  overflow: hidden;
+}
+
+.progress__fill {
+  display: block;
+  height: 100%;
+  background: var(--spectrum-1);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/*
+ * Before the engine reports a total there is genuinely no position to
+ * show, so this sweeps instead of claiming one. A bar that guesses is
+ * worse than a bar that admits it does not know.
+ */
+.progress__fill--sweep {
+  width: 30%;
+  animation: progress-sweep 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* Motion is decoration here; the label already says what is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill--sweep {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+  .progress__fill {
+    transition: none;
+  }
+}
+
+.progress__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.btn--small {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
 /* ---------------------------------------------------------------- upf */
 
 .upf__intro {

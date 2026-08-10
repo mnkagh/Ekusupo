@@ -43,21 +43,39 @@ function validDocument(playlists = 1) {
 }
 
 interface StubOptions {
-  importResponse?: { body: unknown; status?: number };
+  /** Rejection of the *start* request — a validation failure, typically. */
+  startError?: { body: unknown; status: number };
+  /** What polling reports. Omit to leave the import running. */
+  finished?: Record<string, unknown>;
   transfers?: unknown[];
   catalog?: unknown[];
 }
 
-function stubApi({ importResponse, transfers = [], catalog = [] }: StubOptions = {}) {
+const STARTED_JOB = { id: "t1", status: "pending", dryRun: false };
+
+/**
+ * Imports run in the background like every other transfer (ADR-0033):
+ * the POST answers 202 with a pending job and the outcome arrives by
+ * polling. A rejected document still comes back from the POST, because
+ * it is checked before any job exists.
+ */
+function stubApi({ startError, finished, transfers = [], catalog = [] }: StubOptions = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = url.toString();
+
       if (init?.method === "POST") {
-        return jsonResponse(importResponse?.body ?? {}, importResponse?.status ?? 200);
+        if (href.includes("/cancel")) return jsonResponse({ cancelled: true });
+        if (startError) return jsonResponse(startError.body, startError.status);
+        return jsonResponse({ job: STARTED_JOB, pollUrl: "/transfers/t1" }, 202);
       }
-      if (url.toString().includes("/providers/catalog"))
-        return jsonResponse({ providers: catalog });
-      if (url.toString().includes("/transfers")) return jsonResponse({ transfers });
+
+      if (href.includes("/providers/catalog")) return jsonResponse({ providers: catalog });
+      if (/\/transfers\/[^/]+$/.test(href)) {
+        return jsonResponse({ transfer: finished ?? { ...STARTED_JOB, status: "running" } });
+      }
+      if (href.includes("/transfers")) return jsonResponse({ transfers });
       return jsonResponse({});
     }),
   );
@@ -128,7 +146,7 @@ describe("UpfScreen", () => {
 
   it("imports the chosen playlist to the chosen destination", async () => {
     stubApi({
-      importResponse: { body: { job: { id: "t1", status: "completed" }, report: emptyReport } },
+      finished: { ...STARTED_JOB, status: "completed", report: emptyReport },
     });
     render(<UpfScreen />);
 
@@ -152,7 +170,7 @@ describe("UpfScreen", () => {
 
   it("lists every fault the server found, not just one message", async () => {
     stubApi({
-      importResponse: {
+      startError: {
         status: 400,
         body: {
           error: "That file is not a valid UPF document.",

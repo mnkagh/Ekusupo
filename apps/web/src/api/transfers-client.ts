@@ -28,16 +28,34 @@ export interface TransferJob {
   createdAt: string;
   updatedAt: string;
   report?: TransferReport | null;
+  progress?: TransferProgress | null;
   /** Whether a UPF document can be downloaded for this transfer. */
   hasUpfDocument?: boolean;
 }
 
-export interface DryRunResult {
+/** How far a running transfer has got — see @ekusupo/core. */
+export interface TransferProgress {
+  step: "validating" | "reading_source" | "matching" | "writing" | "done";
+  processed?: number;
+  total?: number;
+}
+
+/**
+ * What starting a transfer returns: the job, not the outcome. Transfers
+ * run in the background (ADR-0033), so the result arrives by polling
+ * `getTransfer`.
+ */
+export interface StartedTransfer {
   job: TransferJob;
-  report: TransferReport;
+  pollUrl: string;
   usedConnectedAccount?: boolean;
-  /** Present only for a Live Transfer whose destination was UPF. */
-  downloadUrl?: string;
+}
+
+/** A job is finished when its status is one of these. */
+export const TERMINAL_STATUSES = ["completed", "partial", "failed", "cancelled"] as const;
+
+export function isTerminal(status: string): boolean {
+  return (TERMINAL_STATUSES as readonly string[]).includes(status);
 }
 
 /** One reported problem in an uploaded UPF document — see @ekusupo/upf. */
@@ -111,12 +129,11 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
 
   return {
     /**
-     * Runs a Dry Run. Note this resolves for a *failed* transfer too —
-     * the request succeeded, the transfer's outcome was failure, and the
-     * report explains why. Callers must check `job.status` rather than
-     * treating any resolved promise as success (ADR-0027).
+     * Starts a Dry Run. Resolves as soon as the job exists, **not** when
+     * the transfer finishes — the work continues on the server
+     * (ADR-0033). Poll `getTransfer` for the outcome.
      */
-    dryRun(sourcePlaylistId: string): Promise<DryRunResult> {
+    dryRun(sourcePlaylistId: string): Promise<StartedTransfer> {
       return request("/transfers/dry-run", {
         method: "POST",
         body: JSON.stringify({ sourcePlaylistId }),
@@ -124,13 +141,12 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
     },
 
     /**
-     * Runs a real transfer. `confirm: true` is required by the API's own
+     * Starts a real transfer. `confirm: true` is required by the API's own
      * schema, not decoration here — a Live Transfer writes to a real
      * destination and CLAUDE.md §9.3 requires explicit confirmation for
-     * exactly that. Resolves for a failed transfer too; check
-     * `job.status`.
+     * exactly that.
      */
-    liveTransfer(sourcePlaylistId: string, destinationProvider: string): Promise<DryRunResult> {
+    liveTransfer(sourcePlaylistId: string, destinationProvider: string): Promise<StartedTransfer> {
       return request("/transfers/live", {
         method: "POST",
         body: JSON.stringify({ sourcePlaylistId, destinationProvider, confirm: true }),
@@ -146,7 +162,7 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
       document: unknown,
       destinationProvider: string,
       playlistId?: string,
-    ): Promise<DryRunResult> {
+    ): Promise<StartedTransfer> {
       return request("/transfers/import-upf", {
         method: "POST",
         body: JSON.stringify({
@@ -156,6 +172,14 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
           ...(playlistId ? { playlistId } : {}),
         }),
       });
+    },
+
+    getTransfer(jobId: string): Promise<{ transfer: TransferJob }> {
+      return request(`/transfers/${encodeURIComponent(jobId)}`);
+    },
+
+    cancelTransfer(jobId: string): Promise<{ cancelled: true }> {
+      return request(`/transfers/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
     },
 
     listTransfers(): Promise<{ transfers: TransferJob[] }> {

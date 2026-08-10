@@ -65,4 +65,36 @@ export async function ensureSchema(db: Database): Promise<void> {
   await db.execute(sql`
     ALTER TABLE transfer_jobs ADD COLUMN IF NOT EXISTS upf_document JSONB
   `);
+
+  await db.execute(sql`
+    ALTER TABLE transfer_jobs ADD COLUMN IF NOT EXISTS progress JSONB
+  `);
+}
+
+/**
+ * Transfers run in this process (ADR-0033), so a job that was mid-flight
+ * when the server stopped has no one left to finish it. Its row still
+ * says `running`, which would leave a client polling forever for a
+ * result that is never coming.
+ *
+ * Marking those failed at boot is the honest outcome: the work really did
+ * stop, and saying so lets the user retry. Resuming instead (CLAUDE.md
+ * §9.3's "resume where feasible") needs to know how far the writes got,
+ * which nothing records yet.
+ *
+ * Safe to run at every boot because it only touches non-terminal rows,
+ * and nothing is running yet when it does.
+ */
+export async function failInterruptedJobs(db: Database): Promise<number> {
+  const result = await db.execute(sql`
+    UPDATE transfer_jobs
+       SET status = 'failed',
+           updated_at = NOW(),
+           report = COALESCE(report, '{}'::jsonb) || jsonb_build_object(
+             'failureReason',
+             'Interrupted by a server restart before it finished. Nothing further was written; run it again.'
+           )
+     WHERE status IN ('pending', 'running')
+  `);
+  return result.affectedRows ?? 0;
 }

@@ -1,5 +1,4 @@
 import type { AuthSession, MusicProvider } from "@ekusupo/connector-sdk";
-import { runDryRunTransfer, runLiveTransfer } from "@ekusupo/core";
 import { createSpotifyAppSession, createSpotifyProvider } from "@ekusupo/provider-spotify";
 import { parseUpfDocument } from "@ekusupo/upf";
 import type { UpfDocument } from "@ekusupo/upf";
@@ -15,6 +14,8 @@ import type { ProviderCredentials } from "../providers/provider-registry.js";
 import { findProvider } from "../providers/provider-registry.js";
 import { PostgresTransferJobStore } from "../transfers/postgres-transfer-job-store.js";
 import { UPF_DESTINATION_ID, describeWriteLimitation } from "../transfers/transfer-destination.js";
+import { TransferRunner } from "../transfers/transfer-runner.js";
+import type { StartTransferParams, TransferEnd } from "../transfers/transfer-runner.js";
 import { createUpfScratchFile } from "../transfers/upf-scratch-file.js";
 
 export interface TransferRoutesDeps {
@@ -104,13 +105,6 @@ interface ImportBody {
   confirm: true;
 }
 
-/** A resolved end of a transfer, plus whatever teardown it needs. */
-interface TransferEnd {
-  provider: MusicProvider;
-  session: AuthSession;
-  dispose: () => Promise<void>;
-}
-
 interface ResolvedDestination {
   end: TransferEnd;
   /** Whether the output is a downloadable document rather than provider writes. */
@@ -131,6 +125,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
   const makeSpotifyProvider = deps.createSpotifyProviderImpl ?? createSpotifyProvider;
   const makeAppSession = deps.createSpotifyAppSessionImpl ?? createSpotifyAppSession;
   const credentials = deps.providerCredentials ?? {};
+  const runner = new TransferRunner(db);
 
   const canReadPublicAnonymously = Boolean(deps.spotifyClientId && deps.spotifyClientSecret);
   const appSessions = new AppSessionCache(() =>
@@ -263,33 +258,33 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
 
       const jobStore = new PostgresTransferJobStore(db, user.id);
 
-      try {
-        const { job, report } = await runDryRunTransfer({
-          source: source.end.provider,
-          sourceSession: source.end.session,
-          destination: source.end.provider,
-          destinationSession: source.end.session,
+      return startJob(
+        reply,
+        {
+          userId: user.id,
+          mode: "dryRun",
+          source: source.end,
+          // Nothing is written, so there is no destination to choose —
+          // matching still needs one, and the source is the only provider
+          // in hand.
+          destination: source.end,
           sourcePlaylistId: request.body.sourcePlaylistId,
-          jobStore,
-        });
-
-        // An app-level token can only see public data, so a failed read
-        // here usually means the playlist is private rather than
-        // missing. Saying "not found" would send someone hunting for a
-        // typo when the real fix is to connect their account.
-        if (job.status === "failed" && source.appOnly) {
-          report.userActionsRequired.push(
-            "This playlist isn't public. Connect your Spotify account to transfer your own private playlists.",
-          );
-        }
-
-        await jobStore.saveReport(job.id, report);
-        return { job: { ...job, report }, report, usedConnectedAccount: !source.appOnly };
-      } catch (error) {
-        console.warn("[Ekusupo API] Dry Run transfer failed", error);
-        reply.code(502);
-        return { error: "Could not run the transfer. Check the playlist ID and try again." };
-      }
+          onFinished: ({ job, report }) => {
+            // An app-level token can only see public data, so a failed read
+            // usually means the playlist is private rather than missing.
+            // Saying "not found" would send someone hunting for a typo when
+            // the real fix is to connect their account.
+            if (job.status !== "failed" || !source.appOnly) return;
+            report.userActionsRequired.push(
+              "This playlist isn't public. Connect your Spotify account to transfer your own private playlists.",
+            );
+            void jobStore.saveReport(job.id, report).catch(() => undefined);
+          },
+        },
+        // Known before the transfer runs, and worth saying immediately:
+        // an anonymous read can only see public playlists.
+        { usedConnectedAccount: !source.appOnly },
+      );
     },
   );
 
@@ -320,12 +315,13 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
         return;
       }
 
-      return runAndPersist({
+      return startJob(reply, {
         userId: user.id,
+        mode: "live",
         source: source.end,
-        destination,
+        destination: destination.end,
         sourcePlaylistId: request.body.sourcePlaylistId,
-        reply,
+        collectUpfDocument: destination.read,
       });
     },
   );
@@ -371,61 +367,76 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
 
       const scratch = await createUpfScratchFile(parsed.document);
 
-      return runAndPersist({
+      return startJob(reply, {
         userId: user.id,
+        mode: "live",
         source: {
           provider: scratch.provider,
           session: scratch.session,
           dispose: scratch.dispose,
         },
-        destination,
+        destination: destination.end,
         sourcePlaylistId: playlist.id,
-        reply,
+        collectUpfDocument: destination.read,
       });
     },
   );
 
-  /** The shared tail of every Live Transfer: run it, store it, clean up. */
-  async function runAndPersist(params: {
-    userId: string;
-    source: TransferEnd;
-    destination: ResolvedDestination;
-    sourcePlaylistId: string;
-    reply: FastifyReply;
-  }): Promise<unknown> {
-    const { userId, source, destination, sourcePlaylistId, reply } = params;
-    const jobStore = new PostgresTransferJobStore(db, userId);
-
+  /**
+   * Hands the work to the runner and answers **202 Accepted** with the
+   * job — not the finished report. A transfer makes one provider call per
+   * track, so a few hundred tracks is minutes of work; holding the
+   * request open for it would hit every timeout between here and the
+   * browser and give the user nothing to look at meanwhile
+   * (CLAUDE.md §13.2). Poll `GET /transfers/:id`.
+   */
+  async function startJob(
+    reply: FastifyReply,
+    params: StartTransferParams,
+    extra: Record<string, unknown> = {},
+  ): Promise<unknown> {
     try {
-      const { job, report } = await runLiveTransfer({
-        source: source.provider,
-        sourceSession: source.session,
-        destination: destination.end.provider,
-        destinationSession: destination.end.session,
-        sourcePlaylistId,
-        jobStore,
-      });
-
-      await jobStore.saveReport(job.id, report);
-
-      let downloadUrl: string | undefined;
-      if (destination.isUpf) {
-        const document = await destination.read();
-        if (document) {
-          await jobStore.saveUpfDocument(job.id, document);
-          downloadUrl = `/transfers/${job.id}/upf`;
-        }
-      }
-
-      return { job: { ...job, report }, report, ...(downloadUrl ? { downloadUrl } : {}) };
+      const job = await runner.start(params);
+      reply.code(202);
+      return { job, pollUrl: `/transfers/${job.id}`, ...extra };
     } catch (error) {
-      console.warn("[Ekusupo API] Live Transfer failed", error);
+      // Only a failure to *record* the job reaches here — the engine
+      // reports transfer failures in the job itself rather than throwing.
+      console.warn("[Ekusupo API] could not start transfer", error);
+      await Promise.all([
+        params.source.dispose().catch(() => undefined),
+        params.destination.dispose().catch(() => undefined),
+      ]);
       reply.code(502);
-      return { error: "Could not run the transfer. Check the playlist ID and try again." };
-    } finally {
-      await Promise.all([source.dispose(), destination.end.dispose()]);
+      return { error: "Could not start the transfer. Try again." };
     }
   }
+
+  /**
+   * Cooperative cancellation (CLAUDE.md §9.3): this writes the status and
+   * the engine notices between tracks. Tracks already written to a
+   * destination stay written — a transfer is not a transaction, and
+   * pretending otherwise would mean silently deleting things the user can
+   * see. The report says how far it got.
+   */
+  app.post<{ Params: { id: string } }>("/transfers/:id/cancel", async (request, reply) => {
+    const user = await requireAuth(request, reply, authService);
+    if (!user) return;
+
+    const jobStore = new PostgresTransferJobStore(db, user.id);
+    const job = await jobStore.findByIdForUser(request.params.id);
+    if (!job) {
+      reply.code(404);
+      return { error: "Transfer not found." };
+    }
+
+    const cancelled = await jobStore.cancel(request.params.id);
+    if (!cancelled) {
+      reply.code(409);
+      return { error: `That transfer already ${job.status}. There is nothing to cancel.` };
+    }
+    return { cancelled: true };
+  });
 
   app.get("/transfers", async (request, reply) => {
     const user = await requireAuth(request, reply, authService);

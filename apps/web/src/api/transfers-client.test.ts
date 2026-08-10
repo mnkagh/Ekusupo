@@ -61,11 +61,33 @@ describe("createTransfersClient", () => {
     expect(init.credentials).toBe("include");
   });
 
-  it("resolves for a failed transfer — the request worked, the transfer didn't", async () => {
+  it("resolves with a job that has not run yet, not with an outcome", async () => {
+    // Transfers run in the background (ADR-0033): starting one answers
+    // 202 with a pending job, and the report arrives by polling. A caller
+    // that treated this resolution as success would report every transfer
+    // as finished the instant it began.
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ job: { id: "t1", status: "pending" }, pollUrl: "/transfers/t1" }, 202),
+    );
+    const client = createTransfersClient({
+      baseUrl: "http://api.test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const started = await client.dryRun("playlist-1");
+
+    expect(started.job.status).toBe("pending");
+    expect(started.pollUrl).toBe("/transfers/t1");
+  });
+
+  it("reads a finished transfer back by id", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        job: { id: "t1", status: "failed" },
-        report: { failureReason: "Could not read the source playlist: not found" },
+        transfer: {
+          id: "t1",
+          status: "failed",
+          report: { failureReason: "Could not read the source playlist: not found" },
+        },
       }),
     );
     const client = createTransfersClient({
@@ -73,10 +95,27 @@ describe("createTransfersClient", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
-    const result = await client.dryRun("missing");
+    const { transfer } = await client.getTransfer("t1");
 
-    expect(result.job.status).toBe("failed");
-    expect(result.report.failureReason).toContain("Could not read");
+    expect(transfer.status).toBe("failed");
+    expect(transfer.report?.failureReason).toContain("Could not read");
+    expect((fetchImpl.mock.calls[0] as unknown as [string])[0]).toBe(
+      "http://api.test/transfers/t1",
+    );
+  });
+
+  it("cancels a transfer by id", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ cancelled: true }));
+    const client = createTransfersClient({
+      baseUrl: "http://api.test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await client.cancelTransfer("t1");
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api.test/transfers/t1/cancel");
+    expect(init.method).toBe("POST");
   });
 
   it("raises ApiError with the server's message on a real failure", async () => {

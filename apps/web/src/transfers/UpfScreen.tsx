@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import { ApiError } from "../api/errors.js";
@@ -6,8 +6,10 @@ import type { ApiProblem } from "../api/errors.js";
 import { providersClient } from "../api/providers-client.js";
 import type { CatalogProvider } from "../api/providers-client.js";
 import { UPF_DESTINATION_ID, transfersClient } from "../api/transfers-client.js";
-import type { DryRunResult, TransferJob } from "../api/transfers-client.js";
+import type { TransferJob } from "../api/transfers-client.js";
+import { TransferProgressView } from "./TransferProgressView.js";
 import { TransferReportView } from "./TransferReportView.js";
+import { useTransferJob } from "./useTransferJob.js";
 
 /**
  * Only what this screen needs to *describe* a file before sending it —
@@ -25,7 +27,6 @@ type State =
   | { status: "empty" }
   | { status: "loaded"; file: LoadedFile }
   | { status: "importing"; file: LoadedFile }
-  | { status: "done"; file: LoadedFile; result: DryRunResult }
   | { status: "rejected"; message: string; problems: ApiProblem[] };
 
 /** Reads what the file claims to contain, without asserting it is valid. */
@@ -66,14 +67,16 @@ export function UpfScreen() {
   const destinationId = useId();
   const playlistFieldId = useId();
 
-  const loadExports = () => {
+  const loadExports = useCallback(() => {
     void transfersClient
       .listTransfers()
       .then(({ transfers }) => setExports(transfers.filter((job) => job.hasUpfDocument)))
       .catch(() => setExports([]));
-  };
+  }, []);
 
-  useEffect(loadExports, []);
+  const run = useTransferJob(loadExports);
+
+  useEffect(loadExports, [loadExports]);
 
   useEffect(() => {
     void providersClient
@@ -110,14 +113,15 @@ export function UpfScreen() {
     if (state.status !== "loaded") return;
     const file = state.file;
     setState({ status: "importing", file });
+    run.starting();
 
+    // Resolves once the job exists; the hook watches it from there
+    // (ADR-0033). Validation failures still arrive here, as a rejection.
     void transfersClient
       .importUpf(file.document, destination, playlistId || undefined)
-      .then((result) => {
-        setState({ status: "done", file, result });
-        loadExports();
-      })
+      .then((started) => run.watch(started.job))
       .catch((error: unknown) => {
+        run.reset();
         setState({
           status: "rejected",
           message: error instanceof ApiError ? error.message : "The import failed.",
@@ -223,11 +227,15 @@ export function UpfScreen() {
           )}
         </div>
 
-        {state.status === "importing" && (
+        {run.state.status === "starting" && (
           <p className="loading">
             <span className="loading__bar" aria-hidden="true" />
-            Importing
+            Starting the import
           </p>
+        )}
+
+        {run.state.status === "running" && (
+          <TransferProgressView job={run.state.job} onCancel={run.cancel} />
         )}
 
         {state.status === "rejected" && (
@@ -248,15 +256,15 @@ export function UpfScreen() {
           </div>
         )}
 
-        {state.status === "done" && (
+        {run.state.status === "finished" && run.state.job.report && (
           <>
-            <TransferReportView status={state.result.job.status} report={state.result.report} />
-            {state.result.downloadUrl && (
+            <TransferReportView status={run.state.job.status} report={run.state.job.report} />
+            {run.state.job.hasUpfDocument && (
               <p className="notice notice--ok">
                 <a
                   className="btn btn--connect"
-                  href={transfersClient.upfDownloadUrl(state.result.job.id)}
-                  download={`${state.result.job.id}.upf.json`}
+                  href={transfersClient.upfDownloadUrl(run.state.job.id)}
+                  download={`${run.state.job.id}.upf.json`}
                 >
                   Download UPF file
                 </a>

@@ -1,6 +1,6 @@
 import { boolean, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
-import type { TransferReport } from "@ekusupo/core";
+import type { TransferProgressEvent, TransferReport } from "@ekusupo/core";
 import type { UpfDocument } from "@ekusupo/upf";
 
 /**
@@ -69,6 +69,14 @@ export const transferJobsTable = pgTable("transfer_jobs", {
   dryRun: boolean("dry_run").notNull(),
   report: jsonb("report").$type<TransferReport>(),
   upfDocument: jsonb("upf_document").$type<UpfDocument>(),
+  /**
+   * The last progress event the engine emitted, so a client polling a
+   * running job can say "matching, 40 of 120" rather than only
+   * "running". Overwritten in place — this is a live position, not a
+   * history, and keeping every event would make the row grow with the
+   * playlist for no one's benefit.
+   */
+  progress: jsonb("progress").$type<TransferProgressEvent>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });

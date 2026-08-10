@@ -410,11 +410,49 @@ reasoning. Two build passes are required, not one:
    moment the script is injected. Keeping the content script on its own
    single-entry, no-code-splitting build sidesteps this permanently.
 
-`apps/extension/public/manifest.json` is hand-authored and copied verbatim
-into `dist/` by Vite's `publicDir` mechanism — no generation step. This
-only works because both build passes emit entry files under fixed,
-unhashed names (`popup.html`, `options.html`, `background.js`,
-`content.js`) that the manifest can reference statically.
+## The manifest is generated, per browser target
+
+`src/manifest.ts` builds the manifest and a Rollup `generateBundle` hook
+emits it; there is no `public/manifest.json`. This works because both
+build passes emit entry files under fixed, unhashed names (`popup.html`,
+`options.html`, `background.js`, `content.js`) the manifest can reference
+statically.
+
+Generation rather than a checked-in file because Chrome and Firefox
+require MV3 manifests that **cannot both be satisfied by one document**:
+
+|            | Chrome / Edge               | Firefox                              |
+| ---------- | --------------------------- | ------------------------------------ |
+| Background | `background.service_worker` | `background.scripts` (event page)    |
+| Identity   | — (rejects the key)         | `browser_specific_settings.gecko.id` |
+| Output     | `dist/`                     | `dist-firefox/`                      |
+
+Neither browser accepts the other's background key, so a union document
+does not exist. `manifest.test.ts` asserts the two are structurally
+identical once `background` and `browser_specific_settings` are removed,
+so a permission change cannot land in one target and miss the other.
+
+```sh
+pnpm build           # Chrome  -> dist/
+pnpm build:firefox   # Firefox -> dist-firefox/
+pnpm build:all       # both
+```
+
+`scripts/build-targets.mjs` sets `EKUSUPO_BROWSER` for each pass. It is a
+Node wrapper rather than inline `EKUSUPO_BROWSER=firefox vite build`
+because that syntax is POSIX-shell-only and would silently produce a
+Chrome build in the Firefox folder on Windows. An unrecognised value
+throws rather than defaulting.
+
+**One namespace, resolved lazily.** Firefox exposes both `browser.*` and
+a `chrome.*` alias, but the alias is callback-style while `browser.*` is
+promise-style — code here awaits `storage.local.get(...)` directly, so
+the alias would resolve those awaits to `undefined` rather than throwing.
+`src/shared/browser-api.ts` is the only place a namespace is named; it
+prefers `browser` and resolves per property access, not at import time.
+
+Safari is out of scope: it needs Xcode, an Apple developer account, and a
+native wrapper. See ADR-0031.
 
 ## Permissions philosophy
 
@@ -429,7 +467,12 @@ added `"permissions": ["storage"]` — the first PR whose code reads/writes
 PKCE redirect flow) and `host_permissions` for
 `https://accounts.spotify.com/*` (the token exchange endpoint, present in
 `packages/providers/spotify` since v0.1 but genuinely unreachable from
-the extension until something finally called it — ADR-0020).
+the extension until something finally called it — ADR-0020). Adding Apple
+Music and YouTube Music detection extended `host_permissions` to
+`https://api.music.apple.com/*`, `https://www.googleapis.com/*` and
+`https://oauth2.googleapis.com/*`, and the content-script matches to
+`*://music.apple.com/*` and `*://music.youtube.com/*`. `permissions`
+stays at `["storage", "identity"]` — neither provider needs a new one.
 
 ## Testing approach
 
@@ -451,8 +494,12 @@ verified by manually loading the built extension (see
 
 ## Deferred / Open Questions
 
-- Firefox / other MV3-compatible browsers — out of scope; Chrome/Edge only
-  for now, matching the user's own architecture diagram for this phase.
+- Firefox is built and asserted by tests but **has not been verified
+  against a live install** — loading a temporary add-on needs a browser
+  this repository cannot drive. Safari remains out of scope (ADR-0031).
+- Page detection for Apple Music and YouTube Music ships in
+  `content/detectors/`, but neither provider's transfer path has been
+  verified against live provider servers (ADR-0029).
 - Icons/branding assets don't exist yet; omitted from the manifest rather
   than faked. Chrome shows a default icon for unpacked extensions.
 - Whether `shared/`'s future messaging types should also be usable from

@@ -19,4 +19,5 @@ Status: Proposed | Accepted | Superseded
 ## Alternatives Considered
 ```
 
-No ADRs recorded yet.
+The records themselves are the index — read them in numeric order for the
+history, or `ls` this directory for the titles.

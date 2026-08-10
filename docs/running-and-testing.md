@@ -33,7 +33,7 @@ explains how to generate. Leave the Spotify values blank for now —
 pnpm build         # tsc -b across every package
 pnpm lint          # eslint
 pnpm format:check  # prettier
-pnpm test          # vitest, 256 tests
+pnpm test          # vitest, 370 tests
 pnpm audit         # dependency vulnerabilities
 ```
 
@@ -227,6 +227,46 @@ cross-provider integration test, which moves a playlist into a UPF file:
 pnpm exec vitest run tests/integration
 ```
 
+## 4b. Installing the dashboard as an app, and testing it on a phone
+
+The dashboard is a Progressive Web App (ADR-0030): the same build
+installs to a desktop dock or a phone home screen. Two things about
+testing it that will otherwise waste your time:
+
+**The service worker only registers in a production build.** `pnpm dev`
+deliberately never registers it, so you cannot test installation from the
+dev server. Use a preview build:
+
+```sh
+cd apps/web && pnpm build && pnpm preview   # http://localhost:4173
+```
+
+**Installing on a phone needs HTTPS or `localhost`.** Browsers refuse to
+install a PWA served over plain HTTP from a LAN address, so
+`http://192.168.x.x:4173` will load but show no install prompt. Either
+tunnel it (`cloudflared tunnel --url http://localhost:4173`, `ngrok http
+4173`, or similar) and open the HTTPS URL on the phone, or use Chrome's
+device emulation on the desktop.
+
+Then:
+
+- **Chrome / Edge, desktop** — an install icon appears in the address
+  bar. Or DevTools → **Application** → **Manifest** to check the icons
+  and **Service Workers** to confirm it activated.
+- **Android** — the browser menu offers **Install app** / **Add to Home
+  screen**.
+- **iOS Safari** — Share → **Add to Home Screen**. iOS gives no automatic
+  prompt; this is Safari's behaviour, not a bug in the manifest.
+
+To check responsiveness without a phone, DevTools device toolbar down to
+320px wide. Nothing should overflow horizontally at any width.
+
+Offline behaviour is deliberately limited: with the network off, the app
+shell still loads, but any screen that needs the API shows an error
+rather than stale data. The service worker never caches API responses —
+a cached playlist or transfer report would be a stale answer presented as
+a current one.
+
 ## 5. Browsing the database (pgAdmin, psql, DBeaver)
 
 The database is genuine Postgres, but it normally runs _inside_ the API
@@ -271,16 +311,32 @@ and encrypted provider tokens.
 ## 6. The browser extension
 
 ```sh
-cd apps/extension && pnpm build
+cd apps/extension
+pnpm build           # Chrome/Edge -> dist/
+pnpm build:firefox   # Firefox     -> dist-firefox/
+pnpm build:all       # both
 ```
 
-Then in Chrome: `chrome://extensions` → enable **Developer mode** →
-**Load unpacked** → select `apps/extension/dist`.
+The two folders exist because Chrome and Firefox need different MV3
+manifests — see ADR-0031. Load whichever matches your browser:
+
+- **Chrome / Edge** — `chrome://extensions` → enable **Developer mode** →
+  **Load unpacked** → select `apps/extension/dist`.
+- **Firefox** — `about:debugging#/runtime/this-firefox` → **Load
+  Temporary Add-on…** → select `apps/extension/dist-firefox/manifest.json`
+  (the manifest file itself, not the folder). Temporary add-ons are
+  cleared when Firefox restarts; reload after each rebuild.
+
+Safari is not supported.
 
 Visit any Spotify playlist page. A small panel appears in the
-bottom-right corner with Transfer, Preview, and Copy UPF buttons. To
-watch what it does, open `chrome://extensions`, find Ekusupo, and click
-**Inspect views: service worker** for the background console.
+bottom-right corner with Transfer, Preview, and Copy UPF buttons. Apple
+Music and YouTube Music pages are detected too, though their transfer
+paths have not been verified against live provider servers.
+
+To watch what it does: in Chrome, `chrome://extensions` → Ekusupo →
+**Inspect views: service worker**. In Firefox, `about:debugging` →
+**Inspect** next to the add-on.
 
 The extension runs the Transfer Engine locally in its own service
 worker; it does not talk to `services/api`. Connecting the two is not
@@ -303,12 +359,22 @@ hitting one:
 
 - **Live Transfer over HTTP.** The API exposes Dry Run only. The engine
   supports Live Transfer and it is tested, but no route calls it.
-- **Most of the dashboard.** CLAUDE.md §8.2 lists thirteen screens.
-  Sign-in and Connected Providers exist. Transfer setup, progress,
-  reports, history, UPF import/export, and account settings do not —
-  the transfer API is reachable by `curl`, but no UI calls it.
-- **A second real provider.** Everything cross-provider is proven
-  against the UPF file connector, not a second streaming service.
+- **Part of the dashboard.** CLAUDE.md §8.2 lists thirteen screens.
+  Sign-in, Connected Providers, transfer setup and the transfer report
+  exist. **Transfer history, UPF import/export, and account settings do
+  not.**
+- **Verified Apple Music and YouTube Music.** Both connectors exist and
+  are tested up to the network boundary against injected fakes, but
+  neither has been run against live provider servers — that needs a paid
+  Apple developer account and a Google Cloud OAuth client (ADR-0029).
+  Everything cross-provider that _is_ proven end-to-end is proven against
+  the UPF file connector.
+- **A store-listed mobile app.** The dashboard is an installable PWA
+  (ADR-0030) — it installs to a home screen and works offline for the
+  shell — but it is not in the App Store or Play Store and does not use
+  native APIs.
+- **A live-installed Firefox extension.** The Firefox build is produced
+  and asserted by tests, but has not been loaded in a real Firefox.
 - **Background jobs.** Transfers run inline inside the HTTP request.
   Acceptable for Dry Run, inadequate for large real transfers
   (CLAUDE.md §13.2).

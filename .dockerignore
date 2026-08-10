@@ -1,0 +1,33 @@
+# Keeps the build context small and, more importantly, keeps secrets and
+# host-specific state out of the image entirely.
+
+node_modules
+**/node_modules
+
+# Rebuilt inside the image; copying a host build in would ship whatever
+# happened to be lying around, including a stale one.
+dist
+**/dist
+dist-firefox
+**/dist-firefox
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Every account, session and encrypted provider token from local
+# development. Never belongs in an image.
+services/api/data
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+.git
+.github
+coverage
+**/coverage
+*.log
+.vscode
+.idea
+.DS_Store
+Thumbs.db

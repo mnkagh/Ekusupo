@@ -1,0 +1,71 @@
+# Runs the API and the dashboard together. From the repository root:
+#
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# There is no database service, and that is not an omission: the API
+# embeds Postgres via pglite (ADR-0024), so the database is a directory
+# on the `ekusupo-data` volume rather than a second container.
+
+services:
+  api:
+    build:
+      # The repository root — a pnpm workspace cannot build from a
+      # subdirectory.
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    ports:
+      - "3000:3000"
+    environment:
+      # Required. The API refuses to store a provider connection without
+      # it. Generate with:
+      #   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+      PROVIDER_TOKEN_ENCRYPTION_KEY: ${PROVIDER_TOKEN_ENCRYPTION_KEY:?set this in infra/.env}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:8080}
+      # Only when a proxy you control overwrites X-Forwarded-For — see
+      # ADR-0033. Wrong-on lets anyone forge their address past the
+      # sign-in throttle.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-http://localhost:3000/providers/spotify/callback}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      YOUTUBE_REDIRECT_URI: ${YOUTUBE_REDIRECT_URI:-http://localhost:3000/providers/youtube-music/callback}
+      APPLE_MUSIC_DEVELOPER_TOKEN: ${APPLE_MUSIC_DEVELOPER_TOKEN:-}
+    volumes:
+      - ekusupo-data:/data
+    restart: unless-stopped
+    healthcheck:
+      # The API's own route, so this reports the app being up rather than
+      # the port being open.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        # Baked in at build time — Vite substitutes it during the build,
+        # so changing it needs a rebuild, not a restart.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  # Named, so `docker compose down` does not take the accounts with it.
+  # `docker compose down -v` does, which is the point of it being
+  # separate.
+  ekusupo-data:

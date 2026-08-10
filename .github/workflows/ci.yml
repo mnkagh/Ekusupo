@@ -1,0 +1,92 @@
+name: CI
+
+# Every push and every pull request, because the five checks below are
+# exactly the ones docs/running-and-testing.md §2 asks a contributor to
+# run — CI exists so that asking is not the only thing enforcing them.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+# A new push to the same branch cancels the run still going for the old
+# one: only the newest commit's result means anything, and paying for
+# both slows down the queue for everyone.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      # `cache: pnpm` needs pnpm to already exist, hence the order.
+      # `.nvmrc` keeps the version in one place rather than pinned here
+      # and drifting from what contributors actually run.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format
+        run: pnpm format:check
+
+      # Runs against a real embedded Postgres per test (ADR-0024), so
+      # this needs no service container — the database is a dependency,
+      # not infrastructure.
+      - name: Test
+        run: pnpm test
+
+      - name: Audit dependencies
+        run: pnpm audit
+
+  # Separate job: a broken client build must be distinguishable from a
+  # broken test at a glance, and these two can run while `verify` does.
+  build-clients:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Build the web app
+        run: pnpm --filter @ekusupo/web build
+
+      # Both extension targets, because Chrome and Firefox need
+      # different MV3 manifests and a change can land in one and miss the
+      # other (ADR-0031).
+      - name: Build the extension for Chrome and Firefox
+        run: pnpm --filter @ekusupo/extension build:all
+
+      - name: Upload the built extensions
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-builds
+          path: |
+            apps/extension/dist
+            apps/extension/dist-firefox
+          retention-days: 7

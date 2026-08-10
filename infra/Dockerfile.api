@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+# Build context is the repository root, not this directory — a pnpm
+# workspace with `workspace:*` dependencies cannot be built from a
+# subdirectory. See infra/README.md for the command.
+
+FROM node:22-slim AS build
+WORKDIR /app
+RUN corepack enable
+
+# Manifests and the lockfile first, so a change to source code does not
+# invalidate the (slow) install layer.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc* ./
+COPY apps ./apps
+COPY packages ./packages
+COPY services ./services
+COPY tests ./tests
+COPY tsconfig.base.json tsconfig.json ./
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm build
+
+FROM node:22-slim AS runtime
+RUN corepack enable
+
+# Never root: this process talks to the internet and evaluates provider
+# responses. The node image already ships an unprivileged `node` user.
+USER node
+WORKDIR /app
+
+# The whole built workspace, `node_modules` included. Pruning it with
+# `pnpm deploy` would produce a smaller image, but `workspace:*` links
+# make that fiddly enough to get subtly wrong, and a correct large image
+# beats a broken small one. Revisit if image size becomes a real cost.
+COPY --from=build --chown=node:node /app /app
+
+ENV NODE_ENV=production
+# Absolute, and a volume mount point — the default is relative to the
+# working directory, which would put the database inside the container
+# and lose every account on the next deploy.
+ENV DATABASE_PATH=/data/ekusupo-db
+ENV PORT=3000
+
+WORKDIR /app/services/api
+VOLUME ["/data"]
+EXPOSE 3000
+
+# Plain `node`, not `pnpm start`: that script loads a `.env` file, which
+# does not exist here — configuration comes from the environment.
+CMD ["node", "dist/index.js"]

@@ -1,6 +1,7 @@
 dist
 dist-firefox
 node_modules
+.dockerignore
 pnpm-lock.yaml
 *.tsbuildinfo
 

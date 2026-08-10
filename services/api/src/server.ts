@@ -6,9 +6,10 @@ import type { FastifyInstance } from "fastify";
 import { corsOriginsFor } from "./cors-origins.js";
 import { PostgresSessionStore } from "./auth/postgres-session-store.js";
 import { PostgresUserStore } from "./auth/postgres-user-store.js";
+import type { AuthRateLimits } from "./auth/rate-limit-guard.js";
 import type { SessionStore } from "./auth/session-store.js";
 import type { UserStore } from "./auth/user-store.js";
-import { ensureSchema } from "./db/bootstrap.js";
+import { ensureSchema, failInterruptedJobs } from "./db/bootstrap.js";
 import { createDb } from "./db/client.js";
 import type { Database } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
@@ -43,6 +44,15 @@ export interface BuildServerOptions {
   providerCredentials?: Record<string, ProviderCredentials>;
   /** Test seam: replaces parts of a provider definition without a live network call. */
   providerOverrides?: ConnectRoutesDeps["overrides"];
+  /**
+   * Credential-guessing limits. Injectable so a test can set a limit of
+   * one instead of making six real requests, and so every test that
+   * builds a server gets its own counters rather than sharing a module
+   * singleton that leaks state between files.
+   */
+  authRateLimits?: AuthRateLimits;
+  /** See the constructor comment; defaults to `TRUST_PROXY === "true"`. */
+  trustProxy?: boolean;
 }
 
 /**
@@ -54,7 +64,11 @@ export interface BuildServerOptions {
  * injection pattern used everywhere else in this codebase.
  */
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify();
+  // Off unless explicitly enabled. Sign-in throttling keys on
+  // `request.ip`, which follows X-Forwarded-For only when this is on —
+  // and that header is trivially forged by anyone talking to the server
+  // directly. Wrong-off over-limits a shared address; wrong-on is a hole.
+  const app = Fastify({ trustProxy: options.trustProxy ?? process.env.TRUST_PROXY === "true" });
 
   await app.register(cookie);
   await app.register(cors, {
@@ -74,9 +88,21 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   const db = options.db ?? createDb();
   await ensureSchema(db);
 
-  const authService = registerAuthRoutes(app, {
+  // Transfers run in this process (ADR-0033), so anything left `running`
+  // belongs to a process that no longer exists. Resolving those before
+  // serving a single request means no client ever polls a job that
+  // nothing is working on.
+  const interrupted = await failInterruptedJobs(db);
+  if (interrupted > 0) {
+    console.warn(
+      `[Ekusupo API] marked ${interrupted} transfer(s) failed — they were interrupted by a restart.`,
+    );
+  }
+
+  const { authService, rateLimits } = registerAuthRoutes(app, {
     userStore: options.userStore ?? new PostgresUserStore(db),
     sessionStore: options.sessionStore ?? new PostgresSessionStore(db),
+    rateLimits: options.authRateLimits,
   });
 
   const providerConnectionStore =
@@ -121,7 +147,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     providerCredentials: options.providerCredentials,
   });
 
-  registerAccountRoutes(app, { authService, providerConnectionStore, db });
+  // One set of limiters shared with the auth routes, so the password
+  // budget cannot be sidestepped by moving between endpoints.
+  registerAccountRoutes(app, { authService, providerConnectionStore, db, rateLimits });
 
   return app;
 }

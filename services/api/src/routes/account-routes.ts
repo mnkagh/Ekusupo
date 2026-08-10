@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 
 import { AuthError } from "../auth/auth-service.js";
 import type { AuthService } from "../auth/auth-service.js";
+import { createAuthRateLimits, enforceRateLimit } from "../auth/rate-limit-guard.js";
+import type { AuthRateLimits } from "../auth/rate-limit-guard.js";
 import { SESSION_COOKIE_NAME, requireAuth, setSessionCookie } from "../auth/session-cookie.js";
 import { toPublicUser } from "../auth/user.js";
 import type { Database } from "../db/client.js";
@@ -13,6 +15,7 @@ export interface AccountRoutesDeps {
   authService: AuthService;
   providerConnectionStore: ProviderConnectionStore;
   db: Database;
+  rateLimits?: AuthRateLimits;
 }
 
 const changePasswordSchema = {
@@ -48,6 +51,15 @@ function isAuthError(error: unknown): error is AuthError {
 }
 
 /**
+ * One scope for both routes, deliberately. Changing a password and
+ * deleting an account each verify the same password, so separate budgets
+ * would let a guesser alternate between the two endpoints for twice the
+ * attempts — the limit has to follow the secret being guessed, not the
+ * URL it was guessed at.
+ */
+const PASSWORD_CHECK_SCOPE = "password-check";
+
+/**
  * Account settings — CLAUDE.md §8.2's last MVP screen, and the concrete
  * form of §21.2's user-control promise: change your password, take your
  * data with you, and leave entirely.
@@ -55,6 +67,7 @@ function isAuthError(error: unknown): error is AuthError {
 export function registerAccountRoutes(app: FastifyInstance, deps: AccountRoutesDeps): void {
   const { authService, providerConnectionStore, db } = deps;
   const connectionService = new ProviderConnectionService(providerConnectionStore);
+  const rateLimits = deps.rateLimits ?? createAuthRateLimits();
 
   app.post<{ Body: { currentPassword: string; newPassword: string } }>(
     "/account/password",
@@ -62,6 +75,10 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AccountRoutesD
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
+      // Also a password check, so also a guessing target — an unattended
+      // session is exactly the situation the current-password check
+      // defends against.
+      if (!enforceRateLimit(request, reply, rateLimits.sensitive, PASSWORD_CHECK_SCOPE)) return;
 
       try {
         const { sessionId, expiresAt } = await authService.changePassword(
@@ -125,6 +142,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AccountRoutesD
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
+      if (!enforceRateLimit(request, reply, rateLimits.sensitive, PASSWORD_CHECK_SCOPE)) return;
 
       try {
         await authService.deleteAccount(user.id, request.body.password);

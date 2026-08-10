@@ -121,6 +121,11 @@ rather than cosmetic ones:
 - Sign up as a second user and try to read the first user's transfer by
   its id. You get **404**, not 403 — a transfer belonging to someone
   else is indistinguishable from one that does not exist.
+- Sign in with the wrong password six times in a row. The sixth returns
+  **429** with a `Retry-After` header (ADR-0033). It is keyed on your
+  address, not on the email, so this cannot be used to lock someone else
+  out of their own account. A successful sign-in clears the count, so
+  two typos followed by the right password costs you nothing.
 
 ## 4. What needs your own Spotify credentials
 
@@ -233,13 +238,25 @@ This one genuinely writes, and you can see the result. Pick **A UPF file
 HTTP:
 
 ```sh
+# Answers 202 with a job id — the transfer runs in the background.
 curl -s -b jar.txt -X POST $API/transfers/live \
   -H 'Content-Type: application/json' \
   -d '{"sourcePlaylistId":"37i9dQZF1DXcBWIGoYBM5M","destinationProvider":"upf","confirm":true}'
 
+# Poll until status is completed / partial / failed / cancelled.
+curl -s -b jar.txt $API/transfers/<jobId>
+
 # Then fetch the document the transfer produced:
 curl -s -b jar.txt $API/transfers/<jobId>/upf
+
+# Changed your mind halfway:
+curl -s -b jar.txt -X POST $API/transfers/<jobId>/cancel
 ```
+
+Transfers no longer block the request (ADR-0033), so a several-hundred
+track playlist is a usable operation rather than a request that times
+out. While one runs, `GET /transfers/<jobId>` reports `progress` and the
+dashboard draws a real bar. Closing the tab does not stop it.
 
 `confirm: true` is required by the route's schema, not by politeness —
 drop it and you get a 400 (ADR-0032). Expect `"status": "completed"` with
@@ -437,9 +454,15 @@ hitting one:
   native APIs.
 - **A live-installed Firefox extension.** The Firefox build is produced
   and asserted by tests, but has not been loaded in a real Firefox.
-- **Background jobs.** Transfers run inline inside the HTTP request.
-  Acceptable for Dry Run, inadequate for large real transfers
-  (CLAUDE.md §13.2).
+- **Resuming an interrupted transfer.** Transfers run in the background
+  now (ADR-0033), but in this process — so a restart mid-transfer fails
+  the job with a reason rather than picking it up again. Resuming needs
+  to record how far the writes got, which nothing does yet
+  (CLAUDE.md §9.3).
+- **Rate limiting beyond credential guessing.** Sign-in, sign-up and the
+  password checks are throttled; the transfer routes are not. The
+  limiter is also per-process and in memory, so it resets on restart and
+  does not span instances.
 - **Hosted Postgres.** `pglite` is real Postgres, but embedded and
   single-process. Swapping in a hosted instance is a driver change, not
   a redesign.

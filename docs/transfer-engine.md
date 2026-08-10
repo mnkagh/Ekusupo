@@ -151,8 +151,10 @@ interface TransferJobStore {
 
 `InMemoryTransferJobStore` is the default, and is what `apps/extension`
 uses. Since ADR-0027, `services/api` backs the same interface with
-Postgres (`PostgresTransferJobStore`), so a transfer started through the
-API survives a restart.
+Postgres (`PostgresTransferJobStore`), so the _record_ of a transfer
+survives a restart — the **work** does not. A job still running when the
+process dies is marked failed at the next boot (ADR-0033); resuming it
+would need to know how far the writes got, which nothing records.
 
 That store adapts rather than changes the interface: none of these
 methods takes a `userId`, so it closes over one at construction and
@@ -162,11 +164,13 @@ Keeping the core interface free of user identity matters because the
 same package runs inside a browser extension that has no concept of
 users.
 
-Cancellation works against this store today: setting a job's status to
-`"cancelled"` mid-run causes `runTransfer` to stop processing further
-tracks the next time it checks. "Resume after interruption" (CLAUDE.md
-§9.3) is still not implemented — the durable store now exists to resume
-_from_, but nothing reads it back that way yet.
+Cancellation works through this store, and that is the whole mechanism:
+setting a job's status to `"cancelled"` makes `runTransfer` stop before
+the next track. Nothing has to be signalled or aborted, which is exactly
+why `POST /transfers/:id/cancel` (ADR-0033) can stop a job that the
+request which started it stopped waiting for long ago. "Resume after
+interruption" (CLAUDE.md §9.3) is still not implemented — the durable
+store exists to resume _from_, but nothing reads it back that way yet.
 
 ## Transfer report
 
@@ -209,14 +213,40 @@ field.
 All routes require an authenticated session cookie (401 otherwise) and
 are scoped to the calling user — see ADR-0027 and ADR-0032.
 
-| Route                        | Behavior                                                                                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /transfers/dry-run`    | Body `{ sourcePlaylistId, sourceProvider? }`. Runs `runDryRunTransfer` and returns `{ job, report }`. 400 if the id is missing or the source isn't reachable. |
-| `POST /transfers/live`       | Body `{ sourcePlaylistId, destinationProvider, confirm: true, sourceProvider? }`. Runs `runLiveTransfer`. **Writes.**                                         |
-| `POST /transfers/import-upf` | Body `{ document, destinationProvider, confirm: true, playlistId? }`. Same engine, with the uploaded document as the source.                                  |
-| `GET /transfers`             | The caller's jobs, newest first, each with its stored report and a `hasUpfDocument` flag.                                                                     |
-| `GET /transfers/:id`         | One job. 404 if it doesn't exist **or belongs to another user** — the two are deliberately indistinguishable.                                                 |
-| `GET /transfers/:id/upf`     | The UPF document that transfer produced, as a download. 404 when there is none, or it is another user's.                                                      |
+| Route                        | Behavior                                                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /transfers/dry-run`    | Body `{ sourcePlaylistId, sourceProvider? }`. **202** with `{ job, pollUrl }`. 400 if the id is missing or the source is not reachable. |
+| `POST /transfers/live`       | Body `{ sourcePlaylistId, destinationProvider, confirm: true, sourceProvider? }`. **202**. **Writes.**                                  |
+| `POST /transfers/import-upf` | Body `{ document, destinationProvider, confirm: true, playlistId? }`. **202**. Same engine, with the uploaded document as the source.   |
+| `POST /transfers/:id/cancel` | Stops a running transfer. 409 if it already finished; 404 if it is not the caller's.                                                    |
+| `GET /transfers`             | The caller's jobs, newest first, each with its stored report, `progress`, and a `hasUpfDocument` flag.                                  |
+| `GET /transfers/:id`         | One job. 404 if it does not exist **or belongs to another user** — the two are deliberately indistinguishable.                          |
+| `GET /transfers/:id/upf`     | The UPF document that transfer produced, as a download. 404 when there is none, or it is another user's.                                |
+
+### Transfers run in the background
+
+Starting a transfer answers **202 Accepted** with the job, not the
+report: the engine makes one provider call per track, so a few hundred
+tracks is minutes of work and no HTTP request should be held open for it
+(CLAUDE.md §13.2, ADR-0033). Poll `GET /transfers/:id` until `status` is
+one of `completed`, `partial`, `failed` or `cancelled`.
+
+`progress` carries the engine's last event — `{ step, processed, total }`
+— so a client can show a real position rather than a spinner.
+
+Two guarantees worth relying on:
+
+- **A terminal status means everything is stored.** The report and any
+  UPF export are written _before_ the job is allowed to look finished, so
+  a client that polls until terminal and then downloads never races.
+- **A job left `running` by a crashed process is failed at boot**, with a
+  reason saying so. Nothing polls forever.
+
+Cancellation is cooperative: `POST /transfers/:id/cancel` writes the
+status and the engine notices between tracks. **Tracks already written
+stay written** — a transfer is not a transaction, and deleting things
+from the destination that the user can already see would be worse than
+stopping.
 
 ### Confirming a write
 

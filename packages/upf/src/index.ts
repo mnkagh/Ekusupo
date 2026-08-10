@@ -4,6 +4,8 @@ export type { Artwork, ArtworkImage } from "./artwork.js";
 export { UPF_FORMAT_NAME, UPF_FORMAT_VERSION } from "./document.js";
 export type { UpfDocument, UpfSource } from "./document.js";
 export type { ExternalIds } from "./external-ids.js";
+export { parseUpfDocument, parseUpfJson } from "./parse.js";
+export type { UpfParseError, UpfParseResult } from "./parse.js";
 export type { Playlist, PlaylistItem, PlaylistPrivacy } from "./playlist.js";
 export type { ProviderRef, ProviderRefs } from "./provider-ref.js";
 export type { ExplicitContentState, Track } from "./track.js";

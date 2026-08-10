@@ -1,4 +1,5 @@
 import type { TransferReport } from "../api/transfers-client.js";
+import { MatchReviewList } from "./MatchReviewList.js";
 
 export interface TransferReportViewProps {
   status: string;
@@ -51,6 +52,11 @@ export function TransferReportView({ status, report }: TransferReportViewProps) 
           </div>
         </dl>
       )}
+
+      {/* Before the limitations and the not-carried-over list: an
+          uncertain match is the thing most likely to need a human, and
+          §10.4 exists so it is not discovered by listening later. */}
+      <MatchReviewList matches={report.lowConfidenceMatches} />
 
       {report.userActionsRequired.length > 0 && (
         <section className="report__section">

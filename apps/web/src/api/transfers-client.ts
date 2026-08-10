@@ -1,6 +1,33 @@
 import { API_BASE_URL } from "./config.js";
 import { ApiError } from "./errors.js";
 
+/** Mirrors `@ekusupo/upf`'s Track, narrowed to what this app displays. */
+export interface ReportTrack {
+  id: string;
+  title: string;
+  artists?: { name: string }[];
+  album?: { title: string };
+  durationMs?: number;
+}
+
+/**
+ * A match the engine was not confident about. Mirrors
+ * `@ekusupo/core`'s `LowConfidenceMatch` — both ends of the pairing,
+ * because a chosen candidate cannot be judged without the track it was
+ * chosen for (CLAUDE.md §10.4).
+ */
+export interface LowConfidenceMatch {
+  source: ReportTrack;
+  decision: {
+    candidate: ReportTrack;
+    confidence: number;
+    method: string;
+    reason: string;
+    risk: "low" | "medium" | "high";
+    alternatives?: ReportTrack[];
+  };
+}
+
 /** Mirrors `@ekusupo/core`'s TransferReport — see docs/transfer-engine.md. */
 export interface TransferReport {
   sourceProvider: string;
@@ -11,7 +38,7 @@ export interface TransferReport {
   createdItems: number;
   skippedItems: number;
   failedItems: number;
-  lowConfidenceMatches: unknown[];
+  lowConfidenceMatches: LowConfidenceMatch[];
   unavailableItems: { id: string; title: string; artists?: { name: string }[] }[];
   providerLimitationsEncountered: string[];
   userActionsRequired: string[];

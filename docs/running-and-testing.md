@@ -446,8 +446,16 @@ hitting one:
   tested up to the network boundary against injected fakes, but neither
   has been run against live provider servers — that needs a paid Apple
   developer account and a Google Cloud OAuth client (ADR-0029).
-- **Low-confidence match review.** Reports name low-confidence matches,
-  but there is no screen to review and override them (CLAUDE.md §10.4).
+- **Overriding a low-confidence match.** The report now shows every
+  uncertain match with both ends, the confidence, the reason and the
+  alternatives considered — but you cannot pick a different one.
+  Replacing a track needs the destination to support removing one from a
+  playlist (`playlists.removeTracks`), which the Connector SDK declares
+  and no provider implements.
+- **Deploying it anywhere.** `infra/` has a Dockerfile per service and a
+  compose file, and CI builds and tests every push — but the images have
+  never been built or run here (no Docker in this environment), there is
+  no registry, no TLS, and no backups. See `infra/README.md`.
 - **A store-listed mobile app.** The dashboard is an installable PWA
   (ADR-0030) — it installs to a home screen and works offline for the
   shell — but it is not in the App Store or Play Store and does not use

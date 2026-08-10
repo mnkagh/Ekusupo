@@ -186,7 +186,9 @@ interface TransferReport {
   createdItems: number;
   skippedItems: number;
   failedItems: number;
-  lowConfidenceMatches: MatchDecision[]; // from packages/matching
+  // Each pairs the source track with the decision made for it, so a
+  // reviewer sees both ends — see docs/matching-engine.md.
+  lowConfidenceMatches: LowConfidenceMatch[];
   unavailableItems: Track[];
   providerLimitationsEncountered: string[];
   userActionsRequired: string[];

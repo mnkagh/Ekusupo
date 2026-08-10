@@ -102,6 +102,34 @@ For each source track, the Transfer Engine gathers destination candidates
 `matchTrack(sourceTrack, candidates)`. It never reimplements matching logic
 itself — see `docs/transfer-engine.md`.
 
+## What happens to an uncertain match?
+
+Any decision whose `risk` is not `low` is added to the report's
+`lowConfidenceMatches`, **paired with the source track it was made for**:
+
+```ts
+interface LowConfidenceMatch {
+  source: Track; // the track being transferred
+  decision: MatchDecision; // what was chosen, why, and what else was considered
+}
+```
+
+The pairing is load-bearing. A `MatchDecision` alone names only what was
+chosen, and a list of chosen tracks is unreviewable — "we picked
+'Mr. Brightside (Live)'" says nothing about whether that was right
+without saying what it was picked _for_.
+
+The dashboard renders these as a "Worth checking" section on the transfer
+report: both tracks, both durations, the confidence, the method in plain
+language, the engine's own reason, and any alternatives it passed over
+(CLAUDE.md §10.4, §11.3).
+
+**Reviewing is not yet overriding.** Choosing a different candidate means
+removing the one already written, which needs the destination connector
+to implement `playlists.removeTracks` — declared in the Connector SDK,
+implemented by nothing. The dashboard says so rather than offering a
+button that cannot work.
+
 ## What explicitly does NOT belong here?
 
 - **No provider calls.** `packages/matching` never calls

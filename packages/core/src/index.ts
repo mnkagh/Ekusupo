@@ -9,4 +9,4 @@ export type {
   TransferProgressEvent,
   TransferProgressStep,
 } from "./transfer-options.js";
-export type { TransferReport } from "./transfer-report.js";
+export type { LowConfidenceMatch, TransferReport } from "./transfer-report.js";

@@ -208,7 +208,12 @@ function recordMatchAttempt(
   }
 
   report.matchedItems += 1;
-  if (attempt.decision.risk !== "low") report.lowConfidenceMatches.push(attempt.decision);
+  if (attempt.decision.risk !== "low") {
+    // Paired with the source track, not stored bare: a list of chosen
+    // candidates cannot be reviewed without saying what each was chosen
+    // for (CLAUDE.md §10.4).
+    report.lowConfidenceMatches.push({ source: sourceTrack, decision: attempt.decision });
+  }
   return attempt.decision;
 }
 

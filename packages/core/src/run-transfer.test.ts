@@ -526,4 +526,77 @@ describe("runTransfer", () => {
       expect(report.userActionsRequired).toHaveLength(1);
     });
   });
+
+  describe("low-confidence matches (CLAUDE.md §10.4)", () => {
+    it("records what each uncertain match was made *from*, not only what was chosen", async () => {
+      const sourceTrack = track({ id: "s1", title: "Song A", explicit: "explicit" });
+      const source = makeSource(playlist([sourceTrack]));
+      // Clean where the source was explicit: the same recording, so it
+      // matches, but at raised risk — see packages/matching.
+      const cleanVersion = track({ id: "d1", title: "Song A", explicit: "clean" });
+      const destination = makeDestination({
+        search: async () => ({ items: [cleanVersion] }),
+      });
+
+      const { report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(report.lowConfidenceMatches).toHaveLength(1);
+      const flagged = report.lowConfidenceMatches[0];
+      // Both ends. Without the source, a reviewer sees "we picked Song A"
+      // and has no way to judge whether that was right.
+      expect(flagged?.source.id).toBe("s1");
+      expect(flagged?.decision.candidate.id).toBe("d1");
+      expect(flagged?.decision.risk).not.toBe("low");
+      expect(flagged?.decision.reason).toBeTruthy();
+    });
+
+    it("carries the alternatives the engine passed over, for an ambiguous match", async () => {
+      const source = makeSource(playlist([track({ id: "s1", title: "Song A" })]));
+      const destination = makeDestination({
+        search: async () => ({
+          items: [track({ id: "d1", title: "Song A" }), track({ id: "d2", title: "Song A" })],
+        }),
+      });
+
+      const { report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      const flagged = report.lowConfidenceMatches[0];
+      expect(flagged?.decision.risk).toBe("high");
+      // §10.3: a decision should expose its alternatives. Reviewing an
+      // ambiguous pick without seeing what else was on the table is not
+      // reviewing it.
+      expect(flagged?.decision.alternatives?.map((t) => t.id)).toEqual(["d2"]);
+    });
+
+    it("leaves confident matches out of the review list entirely", async () => {
+      const source = makeSource(playlist([track({ id: "s1", title: "Song A" })]));
+      const destination = makeDestination({
+        search: async () => ({ items: [track({ id: "d1", title: "Song A" })] }),
+      });
+
+      const { report } = await runLiveTransfer({
+        source,
+        sourceSession,
+        destination,
+        destinationSession,
+        sourcePlaylistId: "playlist-1",
+      });
+
+      expect(report.matchedItems).toBe(1);
+      // A review list that includes everything is a list nobody reads.
+      expect(report.lowConfidenceMatches).toEqual([]);
+    });
+  });
 });

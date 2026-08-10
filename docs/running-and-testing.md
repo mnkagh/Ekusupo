@@ -483,6 +483,12 @@ hitting one:
   password checks are throttled; the transfer routes are not. The
   limiter is also per-process and in memory, so it resets on restart and
   does not span instances.
+- **A transfer into YouTube longer than about 200 tracks.**
+  `playlistItems.insert` costs 50 quota units and the default daily
+  allowance is 10,000, so a long playlist exhausts the account's quota
+  rather than the code failing. The connector maps the resulting error as
+  retryable and the report says what happened, but the ceiling is
+  Google's, not ours.
 - **Hosted Postgres.** `pglite` is real Postgres, but embedded and
   single-process. Swapping in a hosted instance is a driver change, not
   a redesign.

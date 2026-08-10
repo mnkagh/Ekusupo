@@ -207,6 +207,18 @@ export function createYouTubeMusicProvider(config: YouTubeMusicProviderConfig = 
       // rather than assembled locally — YouTube assigns item ids and
       // positions, and inventing them here would produce a Playlist that
       // does not match what the destination actually holds.
+      //
+      // Known cost, not an oversight: the Transfer Engine calls this once
+      // per track (so that a failed write can name the exact track), which
+      // makes this re-read happen once per track too, and it now paginates
+      // the whole playlist each time. The engine discards the returned
+      // value. Fixing it properly means either batching writes in the
+      // engine — which would blur per-track error attribution — or
+      // loosening this SDK contract, and neither is worth doing blind:
+      // `playlistItems.insert` costs 50 quota units against a 10,000-unit
+      // daily default, so a transfer runs out of insert budget at ~200
+      // tracks long before these `list` calls (1 unit each) matter.
+      // Revisit with real numbers from a live account.
       return this.getPlaylist!(session, playlistId);
     },
   };

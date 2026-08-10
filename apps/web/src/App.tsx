@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 
+import { AccountScreen } from "./account/AccountScreen.js";
 import { authClient } from "./api/auth-client.js";
 import type { PublicUser } from "./api/auth-client.js";
 import { AuthDrawer } from "./auth/AuthDrawer.js";
 import { ImmersiveLanding } from "./landing/ImmersiveLanding.js";
 import { ProvidersScreen } from "./providers/ProvidersScreen.js";
 import { TransferScreen } from "./transfers/TransferScreen.js";
+import { UpfScreen } from "./transfers/UpfScreen.js";
 import { CoreField } from "./visuals/CoreField.js";
 import { IntroScreen } from "./visuals/IntroScreen.js";
 
@@ -45,9 +47,12 @@ function readProviderRedirectMessage(search: string): RedirectMessage | null {
 }
 
 /**
- * Everything past sign-in and connected providers — transfer setup and
- * every other CLAUDE.md §8.2 screen — is separate, later work
- * (ADR-0021, ADR-0023, ADR-0026 "What's deferred").
+ * One page rather than a router, because every CLAUDE.md §8.2 screen the
+ * MVP needs — transfer setup and report, connected providers, UPF files,
+ * account settings — is a panel someone scrolls to, not a place to
+ * navigate to. Adding routing would buy deep links to four panels and
+ * cost a dependency plus a navigation model; revisit when there is a
+ * screen that genuinely cannot be a panel.
  */
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
@@ -146,6 +151,11 @@ export function App() {
                 )}
                 <TransferScreen />
                 <ProvidersScreen />
+                <UpfScreen />
+                <AccountScreen
+                  user={auth.user}
+                  onDeleted={() => setAuth({ status: "signed-out" })}
+                />
               </main>
             )}
           </div>

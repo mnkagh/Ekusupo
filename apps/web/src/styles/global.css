@@ -688,6 +688,41 @@ input {
   color: var(--text-muted);
 }
 
+/*
+ * A <select> sharing .field__input needs its own options coloured: the
+ * dropdown list is drawn by the OS, which does not inherit the page's
+ * dark palette and would otherwise render near-white text on white.
+ */
+select.field__input option {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+/*
+ * The file input's own button is the browser's, not the design system's.
+ * Styling it to match rather than hiding it behind a custom control keeps
+ * the native keyboard and screen-reader behaviour intact (§20.3).
+ */
+input[type="file"].field__input {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+input[type="file"].field__input::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+input[type="file"].field__input::file-selector-button:hover {
+  border-color: var(--spectrum-1);
+}
+
 .field__input:hover {
   border-color: var(--line-strong);
 }
@@ -2102,6 +2137,78 @@ input {
   margin-left: auto;
   font-size: var(--text-xs);
   color: var(--text-muted);
+}
+
+.history__download {
+  font-size: var(--text-xs);
+  color: var(--spectrum-1);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.history__download:hover,
+.history__download:focus-visible {
+  border-bottom-color: currentColor;
+}
+
+/* ------------------------------------------------------------ confirm */
+
+/*
+ * The step between "Transfer" and a real write. Deliberately interrupts
+ * the flow rather than sitting quietly beside the button: CLAUDE.md §9.3
+ * asks for confirmation before a destructive or ambiguous action, and a
+ * confirmation nobody notices is not one.
+ */
+.confirm {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.confirm__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- upf */
+
+.upf__intro {
+  margin-bottom: var(--space-4);
+}
+
+.upf__summary {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Scrolls rather than growing without limit: a badly broken file can
+   report fifty faults, and the list must not push the fix button off
+   the screen. */
+.upf__problems {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  max-height: 14rem;
+  overflow-y: auto;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.upf__problems code {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
 }
 
 /* --------------------------------------------------------- small screens */

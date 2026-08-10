@@ -3,8 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <title>Ekusupo</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+
+    <!--
+      viewport-fit=cover lets the layout reach under a notch; the CSS
+      then pads back using env(safe-area-inset-*), which is the only way
+      to use the full screen on a modern phone without text sliding under
+      the camera cutout or the home indicator.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Installable app: manifest for Android/desktop, the meta tags for iOS,
+         which still ignores the manifest for home-screen launches. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0a0812" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ekusupo" />
     <!--
       One family across the whole interface. Inter for text and Inter
       Tight for headings: same skeleton, tighter fit at display sizes, so

@@ -2190,3 +2190,121 @@ input {
     display: none;
   }
 }
+
+/* ------------------------------------------------- device adaptation */
+
+/*
+ * Safe-area insets. `viewport-fit=cover` in index.html lets the layout
+ * reach under a notch and the home indicator; without padding it back,
+ * content slides beneath the camera cutout on a phone and under the
+ * rounded corners of a landscape screen.
+ *
+ * Added to the existing padding rather than replacing it, so the layout
+ * is unchanged on hardware with no insets — env() resolves to 0 there.
+ */
+.shell__inner {
+  padding-left: max(var(--space-5), env(safe-area-inset-left));
+  padding-right: max(var(--space-6), env(safe-area-inset-right));
+  padding-bottom: max(var(--space-7), env(safe-area-inset-bottom));
+}
+
+.drawer__panel {
+  padding-right: max(var(--space-5), env(safe-area-inset-right));
+  padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+}
+
+/* Tablets and small laptops: the rail still fits, but the generous
+   desktop gutters do not. */
+@media (min-width: 40.0625rem) and (max-width: 64rem) {
+  .shell__inner {
+    gap: var(--space-5);
+  }
+
+  .tile-grid {
+    max-height: min(66vh, 40rem);
+  }
+}
+
+/*
+ * Touch targets. A 32px control is comfortable with a mouse and a miss
+ * with a thumb; 44px is the figure both Apple's and Google's guidance
+ * settle on. Applied by input type rather than by width, because a
+ * tablet with a mouse should keep the tighter desktop sizing.
+ */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .field__input {
+    /* Below 16px, iOS Safari zooms the page on focus and never zooms
+       back out — the field is sized to prevent that, not for looks. */
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+/*
+ * Landscape on a phone: almost no vertical room, so the tall centred
+ * hero has to give way or the buttons fall below the fold.
+ */
+@media (max-height: 30rem) and (orientation: landscape) {
+  .immersive {
+    min-height: auto;
+    padding: var(--space-4) 0;
+    gap: var(--space-4);
+  }
+
+  .immersive__word span {
+    font-size: clamp(2rem, 9vh, 4rem);
+  }
+
+  .tile-grid {
+    max-height: 60vh;
+  }
+}
+
+/* Very small phones (320px class). Below this the wordmark is the only
+   thing that must not overflow. */
+@media (max-width: 22.5rem) {
+  .immersive__word {
+    gap: 0;
+  }
+
+  .immersive__word span {
+    font-size: 2.75rem;
+  }
+
+  .shell__inner {
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+  }
+}
+
+/*
+ * Windows high-contrast / forced-colours mode strips author colours.
+ * Gradient-filled text becomes invisible there, because the fill it was
+ * clipped to is discarded — so the letterforms are given a real colour
+ * back rather than relying on a background.
+ */
+@media (forced-colors: active) {
+  .immersive__word span,
+  .intro__letter,
+  .wordmark__text,
+  .counter__value,
+  .spectrum-text {
+    -webkit-text-fill-color: currentcolor;
+    color: CanvasText;
+    background: none;
+  }
+
+  .immersive__word span::before,
+  .core-field {
+    display: none;
+  }
+}

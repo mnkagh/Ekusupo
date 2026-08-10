@@ -180,6 +180,39 @@ describe("POST /transfers/live", () => {
     ]);
   });
 
+  it("names an unusable destination even when the source is not connected either", async () => {
+    // A capability limitation is fixed; a missing connection is not. If
+    // the source check came first, someone would connect an account and
+    // then be refused anyway — two round trips for one form.
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/live",
+      payload: { sourcePlaylistId: "playlist-1", destinationProvider: "spotify", confirm: true },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/Spotify cannot be a Live Transfer destination/);
+  });
+
+  it("still reports a source problem when the destination is fine", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/live",
+      payload: { sourcePlaylistId: "playlist-1", destinationProvider: "upf", confirm: true },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/Connect Spotify/);
+  });
+
   it("refuses a destination that cannot be written to, before reading the source", async () => {
     const sessionCookie = await buildConnectedApp();
 

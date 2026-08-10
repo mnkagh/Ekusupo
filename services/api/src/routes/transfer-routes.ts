@@ -300,16 +300,25 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
 
-      const sourceProviderId = request.body.sourceProvider ?? "spotify";
-      const source = await resolveSource(user.id, sourceProviderId, reply);
-      if (!source) return;
-
+      // Destination first, deliberately. A destination that cannot be
+      // written to is a fixed fact about that provider's API — no amount
+      // of connecting accounts will change it. Reporting the source
+      // problem first would send someone off to connect an account and
+      // then refuse them anyway, which is two round trips for one form.
       const destination = await resolveDestination(
         user.id,
         request.body.destinationProvider,
         reply,
       );
       if (!destination) return;
+
+      const sourceProviderId = request.body.sourceProvider ?? "spotify";
+      const source = await resolveSource(user.id, sourceProviderId, reply);
+      if (!source) {
+        // resolveDestination may already have opened a scratch file.
+        await destination.end.dispose();
+        return;
+      }
 
       return runAndPersist({
         userId: user.id,

@@ -70,6 +70,33 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   // directly. Wrong-off over-limits a shared address; wrong-on is a hole.
   const app = Fastify({ trustProxy: options.trustProxy ?? process.env.TRUST_PROXY === "true" });
 
+  // Fastify's built-in JSON parser rejects an empty body outright
+  // (FST_ERR_CTP_EMPTY_JSON_BODY, a 400). Browser clients routinely set
+  // `Content-Type: application/json` on every request from one shared
+  // `fetch` wrapper, including the POSTs that carry no body at all — so
+  // `/auth/sign-out` answered 400 and nobody could sign out of the
+  // dashboard, while every `.inject()` test passed because `inject`
+  // sends no content-type unless given a payload. Treat an empty body
+  // as `{}` and let each route's schema decide whether that is
+  // acceptable; malformed JSON is still a 400.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_request, body: string, done) => {
+      if (body.trim() === "") {
+        done(null, {});
+        return;
+      }
+      try {
+        done(null, JSON.parse(body));
+      } catch {
+        const failure = new Error("Body is not valid JSON.") as Error & { statusCode?: number };
+        failure.statusCode = 400;
+        done(failure, undefined);
+      }
+    },
+  );
+
   await app.register(cookie);
   await app.register(cors, {
     origin: options.corsOrigin ?? corsOriginsFor("http://localhost:5173"),

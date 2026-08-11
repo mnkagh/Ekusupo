@@ -467,6 +467,31 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     return { transfer: job };
   });
 
+  /**
+   * Removes a finished transfer from history, with its report and its
+   * UPF export (CLAUDE.md §21.2). A live transfer has to be cancelled
+   * first — see `deleteForUser` for why deleting one mid-flight is not
+   * merely rude but actively broken.
+   */
+  app.delete<{ Params: { id: string } }>("/transfers/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, authService);
+    if (!user) return;
+
+    const jobStore = new PostgresTransferJobStore(db, user.id);
+    const job = await jobStore.findByIdForUser(request.params.id);
+    if (!job) {
+      reply.code(404);
+      return { error: "Transfer not found." };
+    }
+
+    const deleted = await jobStore.deleteForUser(request.params.id);
+    if (!deleted) {
+      reply.code(409);
+      return { error: "That transfer is still running. Cancel it before deleting it." };
+    }
+    return { deleted: true };
+  });
+
   app.get<{ Params: { id: string } }>("/transfers/:id/upf", async (request, reply) => {
     const user = await requireAuth(request, reply, authService);
     if (!user) return;

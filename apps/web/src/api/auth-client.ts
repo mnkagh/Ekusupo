@@ -35,7 +35,13 @@ export function createAuthClient(config: AuthClientConfig = {}) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       ...init,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        // Only when something is actually being sent. Announcing a JSON
+        // body and then sending none is what broke sign-out: servers are
+        // entitled to reject that, and Fastify does.
+        ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...init?.headers,
+      },
     });
 
     const body = (await response.json().catch(() => ({}))) as T & ErrorBody;

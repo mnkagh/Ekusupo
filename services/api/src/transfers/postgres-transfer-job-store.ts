@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
 import type {
   TransferJob,
   TransferJobStore,
@@ -164,5 +164,34 @@ export class PostgresTransferJobStore implements TransferJobStore {
       .from(transferJobsTable)
       .where(and(eq(transferJobsTable.id, id), eq(transferJobsTable.userId, this.userId)));
     return row ? toJob(row) : undefined;
+  }
+
+  /**
+   * Removes a finished transfer from the user's history, along with its
+   * report and its stored UPF export — they live in columns on this row,
+   * so one delete takes all of it (CLAUDE.md §21.2: users can delete
+   * their transfer history).
+   *
+   * Deliberately refuses a job that is still `pending` or `running`: the
+   * runner writes progress to this row between tracks, and deleting it
+   * underneath a live transfer would turn every subsequent write into a
+   * silent no-op against a row that no longer exists. Cancel first, then
+   * delete — which is also the order that leaves the user a report
+   * explaining how far it got.
+   *
+   * Returns whether a row was actually removed.
+   */
+  async deleteForUser(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(transferJobsTable)
+      .where(
+        and(
+          eq(transferJobsTable.id, id),
+          eq(transferJobsTable.userId, this.userId),
+          notInArray(transferJobsTable.status, ["pending", "running"]),
+        ),
+      )
+      .returning({ id: transferJobsTable.id });
+    return rows.length > 0;
   }
 }

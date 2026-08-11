@@ -36,6 +36,8 @@ interface StubOptions {
   finished?: Record<string, unknown>;
   transfers?: unknown[];
   catalog?: unknown[];
+  /** Rejection of `DELETE /transfers/:id`. Omit for a delete that works. */
+  deleteError?: { body: unknown; status: number };
 }
 
 const STARTED_JOB = { id: "t1", status: "pending", dryRun: true };
@@ -47,11 +49,30 @@ const STARTED_JOB = { id: "t1", status: "pending", dryRun: true };
  * report straight from the POST would let a component that never polls
  * pass this suite.
  */
-function stubApi({ startError, finished, transfers = [], catalog = [] }: StubOptions = {}) {
+function stubApi({
+  startError,
+  finished,
+  transfers = [],
+  catalog = [],
+  deleteError,
+}: StubOptions = {}) {
+  // Mutable, so a delete actually removes the row the way the server
+  // would — a stub that kept returning the deleted job would let a
+  // component that never refreshes its history pass.
+  const remaining = [...transfers];
+
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const href = url.toString();
+
+      if (init?.method === "DELETE") {
+        if (deleteError) return jsonResponse(deleteError.body, deleteError.status);
+        const id = href.split("/").pop();
+        const index = remaining.findIndex((job) => (job as { id?: string }).id === id);
+        if (index >= 0) remaining.splice(index, 1);
+        return jsonResponse({ deleted: true });
+      }
 
       if (init?.method === "POST") {
         if (href.includes("/cancel")) return jsonResponse({ cancelled: true });
@@ -63,7 +84,7 @@ function stubApi({ startError, finished, transfers = [], catalog = [] }: StubOpt
       if (/\/transfers\/[^/]+$/.test(href)) {
         return jsonResponse({ transfer: finished ?? { ...STARTED_JOB, status: "running" } });
       }
-      if (href.includes("/transfers")) return jsonResponse({ transfers });
+      if (href.includes("/transfers")) return jsonResponse({ transfers: remaining });
       return jsonResponse({});
     }),
   );
@@ -383,5 +404,73 @@ describe("TransferScreen — writing for real", () => {
     const downloads = await screen.findAllByRole("link", { name: "Download" });
     expect(downloads).toHaveLength(1);
     expect(downloads[0]?.getAttribute("href")).toContain("/transfers/t9/upf");
+  });
+});
+
+describe("deleting a run from history", () => {
+  const finishedRun = {
+    id: "old-1",
+    status: "completed",
+    dryRun: true,
+    sourcePlaylistId: "playlist-9",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    hasUpfDocument: true,
+  };
+
+  it("takes two clicks, because it also destroys the UPF export", async () => {
+    // CLAUDE.md §9.3: confirmation before a destructive action. One
+    // stray click on the smallest control on the screen must not throw
+    // away the only copy of someone's exported library.
+    stubApi({ transfers: [finishedRun] });
+    render(<TransferScreen />);
+
+    const remove = await screen.findByRole("button", {
+      name: /^Delete the transfer of playlist-9$/,
+    });
+    fireEvent.click(remove);
+
+    expect(
+      (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls.some(
+        (call) => call[1]?.method === "DELETE",
+      ),
+    ).toBe(false);
+    expect(await screen.findByRole("button", { name: /^Confirm deleting/ })).toBeDefined();
+  });
+
+  it("removes the run once confirmed", async () => {
+    stubApi({ transfers: [finishedRun] });
+    render(<TransferScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Delete the transfer of playlist-9$/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Confirm deleting/ }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("playlist-9")).toBeNull();
+    });
+  });
+
+  it("explains a refusal instead of silently leaving the row there", async () => {
+    // The API refuses to delete a transfer that is still running.
+    stubApi({
+      transfers: [finishedRun],
+      deleteError: {
+        body: { error: "That transfer is still running. Cancel it before deleting it." },
+        status: 409,
+      },
+    });
+    render(<TransferScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Delete the transfer of playlist-9$/ }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Confirm deleting/ }));
+
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(await screen.findByText(/still running. Cancel it before deleting it/)).toBeDefined();
+    // And the run is still listed — a failed delete must not look like a
+    // successful one.
+    expect(screen.getByText("playlist-9")).toBeDefined();
   });
 });

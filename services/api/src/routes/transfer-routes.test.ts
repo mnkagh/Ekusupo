@@ -446,3 +446,97 @@ describe("GET /transfers and GET /transfers/:id", () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe("DELETE /transfers/:id", () => {
+  it("requires authentication", async () => {
+    app = await buildServer();
+    const response = await app.inject({ method: "DELETE", url: "/transfers/anything" });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("removes a finished transfer from history, with its UPF export", async () => {
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+      createTransferSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+    });
+    const sessionCookie = await signUpAndGetCookie();
+    await connectSpotify(sessionCookie);
+    const { started } = await runToCompletion(sessionCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "playlist-1",
+    });
+    const jobId = started.json().job.id as string;
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(deleted.statusCode).toBe(200);
+
+    // Gone from every read path, not just the list — the report and the
+    // stored UPF document live on the same row.
+    const byId = await app.inject({
+      method: "GET",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(byId.statusCode).toBe(404);
+
+    const upf = await app.inject({
+      method: "GET",
+      url: `/transfers/${jobId}/upf`,
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(upf.statusCode).toBe(404);
+
+    const history = await app.inject({
+      method: "GET",
+      url: "/transfers",
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(history.json().transfers).toHaveLength(0);
+  });
+
+  it("is 404 for a transfer that doesn't exist", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/transfers/no-such-job",
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("one user can't delete a second user's transfer", async () => {
+    app = await buildServer({
+      providerRoutesConfig: spotifyConfig,
+      createSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+      createTransferSpotifyProviderImpl: fakeSpotifyProviderImpl(),
+    });
+    const ownerCookie = await signUpAndGetCookie();
+    await connectSpotify(ownerCookie);
+    const { started } = await runToCompletion(ownerCookie, "/transfers/dry-run", {
+      sourcePlaylistId: "playlist-1",
+    });
+    const jobId = started.json().job.id as string;
+
+    const otherCookie = await signUpAndGetCookie();
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: otherCookie },
+    });
+    expect(response.statusCode).toBe(404);
+
+    // And the owner still has it — a failed delete must not delete.
+    const stillThere = await app.inject({
+      method: "GET",
+      url: `/transfers/${jobId}`,
+      cookies: { ekusupo_session: ownerCookie },
+    });
+    expect(stillThere.statusCode).toBe(200);
+  });
+});

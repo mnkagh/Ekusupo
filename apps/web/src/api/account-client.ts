@@ -23,7 +23,11 @@ export function createAccountClient(config: AccountClientConfig = {}) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       ...init,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      // Only when there is a body — see auth-client.ts.
+      headers: {
+        ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...init?.headers,
+      },
     });
 
     const body = (await response.json().catch(() => ({}))) as T & ErrorBody;

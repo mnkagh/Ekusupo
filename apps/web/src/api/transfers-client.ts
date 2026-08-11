@@ -144,7 +144,12 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       ...init,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      // Only when there is a body — see auth-client.ts. `cancel` sends
+      // none, and announcing JSON without it is a 400.
+      headers: {
+        ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...init?.headers,
+      },
     });
 
     const body = (await response.json().catch(() => ({}))) as T & ErrorBody;
@@ -211,6 +216,15 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
 
     listTransfers(): Promise<{ transfers: TransferJob[] }> {
       return request("/transfers");
+    },
+
+    /**
+     * Removes a finished transfer from history, along with its report and
+     * its stored UPF export. Rejects with a 409 for a transfer that is
+     * still running — cancel it first.
+     */
+    deleteTransfer(jobId: string): Promise<{ deleted: true }> {
+      return request(`/transfers/${encodeURIComponent(jobId)}`, { method: "DELETE" });
     },
 
     /**

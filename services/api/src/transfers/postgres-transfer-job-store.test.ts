@@ -160,3 +160,42 @@ describe("PostgresTransferJobStore", () => {
     });
   });
 });
+
+describe("deleteForUser", () => {
+  it("removes a finished job", async () => {
+    await storeA.create(makeJob({ status: "completed" }));
+
+    await expect(storeA.deleteForUser("transfer-1")).resolves.toBe(true);
+    await expect(storeA.findByIdForUser("transfer-1")).resolves.toBeUndefined();
+  });
+
+  it("refuses a job that is still pending or running, and leaves it alone", async () => {
+    // The runner writes progress to this row between tracks. Deleting it
+    // mid-flight would turn every later write into a silent no-op
+    // against a row that isn't there.
+    for (const status of ["pending", "running"] as const) {
+      await storeA.create(makeJob({ id: `job-${status}`, status }));
+
+      await expect(storeA.deleteForUser(`job-${status}`)).resolves.toBe(false);
+      await expect(storeA.findByIdForUser(`job-${status}`)).resolves.toBeDefined();
+    }
+  });
+
+  it("deletes a cancelled job, so cancel-then-delete works", async () => {
+    await storeA.create(makeJob({ status: "running" }));
+    await storeA.cancel("transfer-1");
+
+    await expect(storeA.deleteForUser("transfer-1")).resolves.toBe(true);
+  });
+
+  it("won't delete another user's job", async () => {
+    await storeA.create(makeJob({ status: "completed" }));
+
+    await expect(storeB.deleteForUser("transfer-1")).resolves.toBe(false);
+    await expect(storeA.findByIdForUser("transfer-1")).resolves.toBeDefined();
+  });
+
+  it("reports false for a job that never existed", async () => {
+    await expect(storeA.deleteForUser("nope")).resolves.toBe(false);
+  });
+});

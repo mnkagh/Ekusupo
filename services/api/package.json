@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "db:serve": "tsx --env-file-if-exists=.env src/db/serve.ts",
-    "dev": "tsx --env-file-if-exists=.env watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "start": "node --env-file-if-exists=.env dist/index.js"
   },
   "dependencies": {

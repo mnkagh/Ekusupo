@@ -43,6 +43,10 @@ export function TransferScreen() {
   const [destinations, setDestinations] = useState<CatalogProvider[]>([]);
   const [history, setHistory] = useState<TransferJob[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState(false);
+  /** Job id awaiting a second click, then the one being deleted. */
+  const [confirmingDelete, setConfirmingDelete] = useState<string | undefined>();
+  const [deleting, setDeleting] = useState<string | undefined>();
+  const [historyError, setHistoryError] = useState<string | undefined>();
   const [mode, setMode] = useState<Mode>("preview");
   const inputId = useId();
   const destinationId = useId();
@@ -96,6 +100,32 @@ export function TransferScreen() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     start("preview");
+  };
+
+  /**
+   * Two clicks, because this also destroys the transfer's report and its
+   * UPF export — the user's own library data, and the only copy if they
+   * never downloaded it (CLAUDE.md §9.3).
+   */
+  const removeFromHistory = (jobId: string) => {
+    if (confirmingDelete !== jobId) {
+      setConfirmingDelete(jobId);
+      setHistoryError(undefined);
+      return;
+    }
+
+    setConfirmingDelete(undefined);
+    setDeleting(jobId);
+    setHistoryError(undefined);
+    void transfersClient
+      .deleteTransfer(jobId)
+      .then(loadHistory)
+      .catch((error: unknown) => {
+        setHistoryError(
+          error instanceof ApiError ? error.message : "Could not delete that transfer.",
+        );
+      })
+      .finally(() => setDeleting(undefined));
   };
 
   const destinationName =
@@ -226,6 +256,11 @@ export function TransferScreen() {
         {history.length > 0 && (
           <section className="history">
             <h3 className="history__heading">Recent</h3>
+            {historyError && (
+              <p className="history__error" role="alert">
+                {historyError}
+              </p>
+            )}
             <ul className="history__list">
               {history.slice(0, 8).map((job) => (
                 <li key={job.id} className="history__item">
@@ -235,15 +270,36 @@ export function TransferScreen() {
                   </span>
                   <span className="history__playlist">{job.sourcePlaylistId}</span>
                   <span className="history__when">{formatWhen(job.createdAt)}</span>
-                  {job.hasUpfDocument && (
-                    <a
-                      className="history__download"
-                      href={transfersClient.upfDownloadUrl(job.id)}
-                      download={`${job.id}.upf.json`}
+                  <span className="history__actions">
+                    {job.hasUpfDocument && (
+                      <a
+                        className="history__download"
+                        href={transfersClient.upfDownloadUrl(job.id)}
+                        download={`${job.id}.upf.json`}
+                      >
+                        Download
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className={`history__delete${
+                        confirmingDelete === job.id ? " history__delete--confirming" : ""
+                      }`}
+                      onClick={() => removeFromHistory(job.id)}
+                      disabled={deleting === job.id}
+                      aria-label={
+                        confirmingDelete === job.id
+                          ? `Confirm deleting the transfer of ${job.sourcePlaylistId}`
+                          : `Delete the transfer of ${job.sourcePlaylistId}`
+                      }
                     >
-                      Download
-                    </a>
-                  )}
+                      {deleting === job.id
+                        ? "Deleting…"
+                        : confirmingDelete === job.id
+                          ? "Confirm"
+                          : "Delete"}
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>

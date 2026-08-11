@@ -146,4 +146,39 @@ describe("POST /auth/sign-out", () => {
     });
     expect(me.statusCode).toBe(401);
   });
+
+  it("signs out when the client announces JSON but sends no body", async () => {
+    // What a browser actually sends. The dashboard's fetch wrapper sets
+    // `Content-Type: application/json` on every request from one shared
+    // code path, including the POSTs that carry no body — and Fastify's
+    // stock JSON parser answers that with FST_ERR_CTP_EMPTY_JSON_BODY,
+    // so nobody could sign out. Every test above missed it because
+    // `inject` omits the header entirely unless given a payload.
+    const signUp = await app.inject({
+      method: "POST",
+      url: "/auth/sign-up",
+      payload: { email: "browser@example.com", password: "correct horse battery" },
+    });
+    const sessionId = sessionCookieFrom(signUp) ?? "";
+
+    const signOut = await app.inject({
+      method: "POST",
+      url: "/auth/sign-out",
+      headers: { "content-type": "application/json" },
+      cookies: { [SESSION_COOKIE_NAME]: sessionId },
+    });
+
+    expect(signOut.statusCode).toBe(200);
+  });
+
+  it("still rejects a body that is malformed rather than absent", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/sign-in",
+      headers: { "content-type": "application/json" },
+      payload: "{not json",
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
 });

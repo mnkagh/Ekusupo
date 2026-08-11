@@ -42,7 +42,7 @@ explains how to generate. Leave the Spotify values blank for now —
 pnpm build         # tsc -b across every package
 pnpm lint          # eslint
 pnpm format:check  # prettier
-pnpm test          # vitest, 526 tests
+pnpm test          # vitest, 531 tests
 pnpm audit         # dependency vulnerabilities
 ```
 

@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { InMemorySessionStore } from "./auth/session-store.js";
 import { createDbFromClient, createPgliteClient } from "./db/client.js";
 import { buildServer } from "./server.js";
 
@@ -52,6 +53,23 @@ describe("buildServer", () => {
     await app.close();
 
     expect(owned.closed).toBe(true);
+  });
+
+  it("sweeps expired sessions on startup", async () => {
+    // Enforcement happens when a session is presented; a session nobody
+    // ever presents again is only removed by this sweep.
+    const store = new InMemorySessionStore();
+    await store.create({
+      id: "dead",
+      userId: "user-1",
+      createdAt: "2020-01-01T00:00:00.000Z",
+      expiresAt: "2020-01-08T00:00:00.000Z",
+    });
+
+    const app = await buildServer({ sessionStore: store });
+
+    await expect(store.get("dead")).resolves.toBeUndefined();
+    await app.close();
   });
 
   it("leaves a caller-supplied database open, because the caller owns it", async () => {

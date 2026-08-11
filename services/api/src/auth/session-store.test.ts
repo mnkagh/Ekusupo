@@ -33,4 +33,14 @@ describe("InMemorySessionStore", () => {
 
     await expect(store.get("session-1")).resolves.toBeUndefined();
   });
+
+  it("sweeps expired sessions and leaves live ones, like the Postgres store", async () => {
+    const store = new InMemorySessionStore();
+    await store.create(makeSession({ id: "live", expiresAt: "2026-06-01T00:00:00.000Z" }));
+    await store.create(makeSession({ id: "dead", expiresAt: "2026-01-01T00:00:00.000Z" }));
+
+    await expect(store.deleteExpired(new Date("2026-03-01T00:00:00.000Z"))).resolves.toBe(1);
+    await expect(store.get("dead")).resolves.toBeUndefined();
+    await expect(store.get("live")).resolves.toBeDefined();
+  });
 });

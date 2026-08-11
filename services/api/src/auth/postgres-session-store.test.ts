@@ -68,4 +68,34 @@ describe("PostgresSessionStore", () => {
 
     await expect(store.get("session-1")).resolves.toBeUndefined();
   });
+
+  describe("deleteExpired", () => {
+    it("removes only the sessions that have already expired", async () => {
+      await store.create(makeSession({ id: "live", expiresAt: "2026-06-01T00:00:00.000Z" }));
+      await store.create(makeSession({ id: "dead", expiresAt: "2026-01-01T00:00:00.000Z" }));
+
+      const removed = await store.deleteExpired(new Date("2026-03-01T00:00:00.000Z"));
+
+      expect(removed).toBe(1);
+      await expect(store.get("dead")).resolves.toBeUndefined();
+      await expect(store.get("live")).resolves.toBeDefined();
+    });
+
+    it("treats the exact boundary as still valid, matching the auth service", async () => {
+      // `getUserForSession` rejects only when `expiresAt < now`, so a
+      // session expiring exactly now still works. A sweep using `<=`
+      // would sign someone out a moment before the service would.
+      const at = "2026-03-01T00:00:00.000Z";
+      await store.create(makeSession({ id: "edge", expiresAt: at }));
+
+      expect(await store.deleteExpired(new Date(at))).toBe(0);
+      await expect(store.get("edge")).resolves.toBeDefined();
+    });
+
+    it("reports zero when there is nothing to sweep", async () => {
+      await store.create(makeSession({ expiresAt: "2026-12-01T00:00:00.000Z" }));
+
+      await expect(store.deleteExpired(new Date("2026-03-01T00:00:00.000Z"))).resolves.toBe(0);
+    });
+  });
 });

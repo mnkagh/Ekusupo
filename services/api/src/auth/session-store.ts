@@ -15,6 +15,17 @@ export interface SessionStore {
    * standing would make the change decorative.
    */
   deleteForUser(userId: string): Promise<void>;
+  /**
+   * Drops every session that expired before `now`, returning how many.
+   *
+   * Expiry is still the auth service's decision — this store does not
+   * decide what "expired" means, it is told. What it fixes is that
+   * expiry was only ever *enforced* when a session was presented, so a
+   * row for a device that never came back stayed forever: an
+   * unbounded table, holding data past the point it could be used for
+   * anything (CLAUDE.md §21.1).
+   */
+  deleteExpired(now: Date): Promise<number>;
 }
 
 export class InMemorySessionStore implements SessionStore {
@@ -36,5 +47,16 @@ export class InMemorySessionStore implements SessionStore {
     for (const [id, session] of this.sessions) {
       if (session.userId === userId) this.sessions.delete(id);
     }
+  }
+
+  async deleteExpired(now: Date): Promise<number> {
+    let removed = 0;
+    for (const [id, session] of this.sessions) {
+      if (new Date(session.expiresAt).getTime() < now.getTime()) {
+        this.sessions.delete(id);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }

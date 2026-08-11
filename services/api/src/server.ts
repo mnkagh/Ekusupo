@@ -70,6 +70,21 @@ export interface BuildServerOptions {
  * default to in-memory (ADR-0022) but are overridable, the same
  * injection pattern used everywhere else in this codebase.
  */
+/** Six hours: this is housekeeping, not something anyone waits on. */
+const SESSION_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+async function sweepExpiredSessions(sessionStore: SessionStore): Promise<void> {
+  try {
+    const removed = await sessionStore.deleteExpired(new Date());
+    if (removed > 0) {
+      console.log(`[Ekusupo API] swept ${removed} expired session(s).`);
+    }
+  } catch (error) {
+    // Housekeeping must never take the server down with it.
+    console.warn("[Ekusupo API] could not sweep expired sessions", error);
+  }
+}
+
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
   // Off unless explicitly enabled. Sign-in throttling keys on
   // `request.ip`, which follows X-Forwarded-For only when this is on —
@@ -148,10 +163,29 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     );
   }
 
+  const sessionStore = options.sessionStore ?? new PostgresSessionStore(db);
+
   const { authService, rateLimits } = registerAuthRoutes(app, {
     userStore: options.userStore ?? new PostgresUserStore(db),
-    sessionStore: options.sessionStore ?? new PostgresSessionStore(db),
+    sessionStore,
     rateLimits: options.authRateLimits,
+  });
+
+  // Expiry is enforced whenever a session is presented, which is what
+  // keeps an expired cookie from working. It is not what keeps the table
+  // small: a session belonging to a device that never comes back is
+  // never presented, so before this it sat there forever. Sweeping is
+  // about retention, not about access (CLAUDE.md §21.1).
+  await sweepExpiredSessions(sessionStore);
+  const sweep = setInterval(() => {
+    void sweepExpiredSessions(sessionStore);
+  }, SESSION_SWEEP_INTERVAL_MS);
+  // `unref` so this timer never by itself keeps the process alive, and
+  // cleared on close so a test that builds a server does not leave one
+  // ticking against a database it already closed.
+  sweep.unref();
+  app.addHook("onClose", () => {
+    clearInterval(sweep);
   });
 
   const providerConnectionStore =

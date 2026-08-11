@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 
 import type { Database } from "../db/client.js";
 import { sessionsTable } from "../db/schema.js";
@@ -38,5 +38,13 @@ export class PostgresSessionStore implements SessionStore {
 
   async deleteForUser(userId: string): Promise<void> {
     await this.db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+  }
+
+  async deleteExpired(now: Date): Promise<number> {
+    const rows = await this.db
+      .delete(sessionsTable)
+      .where(lt(sessionsTable.expiresAt, now))
+      .returning({ id: sessionsTable.id });
+    return rows.length;
   }
 }

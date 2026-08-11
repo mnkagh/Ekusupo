@@ -1,5 +1,4 @@
 import { Logo } from "../brand/Logo.js";
-import { PaperPlane } from "../brand/PaperPlane.js";
 
 export interface BackdropProps {
   /** `dense` is the signed-in workspace: the mark sits back further so it never competes with the panels. */
@@ -26,16 +25,6 @@ export function Backdrop({ variant = "calm" }: BackdropProps) {
       <div className="backdrop__mark">
         <Logo />
       </div>
-
-      {/*
-        A paper plane circling the mark — the thing being exported, in
-        flight. Its own layer rather than a child of the mark, so the
-        mark's slow drift does not drag the orbit off-centre.
-      */}
-      <div className="backdrop__orbit">
-        <PaperPlane className="backdrop__plane" />
-      </div>
-
       <div className="backdrop__scrim" />
     </div>
   );

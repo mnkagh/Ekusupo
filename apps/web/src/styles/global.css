@@ -102,31 +102,37 @@ input {
 }
 
 /*
- * The orbit. Rotating this wrapper carries the plane around a circle;
- * the plane itself is pushed out to the radius and turned 90°, which
- * points its nose along the tangent instead of straight outward. Doing
- * it with two nested transforms rather than an SVG motion path keeps it
- * on the compositor and costs no layout.
+ * The export arrow leaves, circles the mark, and lands back exactly
+ * where it started — the transfer, on a loop.
+ *
+ * `transform-box: view-box` with the origin at the centre of the 64×64
+ * grid is what makes it orbit the mark rather than spin on its own tip:
+ * without it, SVG would rotate the group about the user-space origin at
+ * the top-left corner and the arrow would swing off-screen.
+ *
+ * It ends on a full 360°, so the last frame is identical to the first
+ * and the loop has no seam. The pauses at either end are what make it
+ * read as a departure and an arrival rather than as constant spinning.
  */
-.backdrop__orbit {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  animation: orbit 34s linear infinite;
+.backdrop__mark .logo__arrow {
+  transform-box: view-box;
+  transform-origin: 32px 32px;
+  animation: arrow-trip 7s var(--ease-in-out) infinite;
 }
 
-.backdrop__plane {
-  width: clamp(2rem, 5.5vmin, 4.25rem);
-  height: auto;
-  transform: translateX(clamp(11rem, 38vmin, 28rem)) rotate(90deg);
-  filter: drop-shadow(0 0 8px var(--spectrum-1)) drop-shadow(0 0 24px var(--glow-teal));
-  opacity: 0.85;
-}
-
-@keyframes orbit {
-  to {
-    transform: rotate(360deg);
+@keyframes arrow-trip {
+  0%,
+  16% {
+    transform: rotate(0deg) translateX(0);
+  }
+  /* Pushed outward mid-flight — the translate is applied in the rotated
+     frame, so it reads as the arrow flying wide of the mark. */
+  50% {
+    transform: rotate(180deg) translateX(5px);
+  }
+  84%,
+  100% {
+    transform: rotate(360deg) translateX(0);
   }
 }
 
@@ -471,9 +477,11 @@ input {
 
 /* Sits above the name rather than beside it: the rail is a narrow
    column, and a mark on the same line would eat a third of the width the
-   heading needs. */
+   heading needs. Lit, like the mark behind the page — at this size a
+   tight radius only, or the glow swamps the shape it is lighting. */
 .wordmark__logo {
   display: block;
+  filter: drop-shadow(0 0 6px var(--glow-violet)) drop-shadow(0 0 14px var(--glow-teal));
 }
 
 /*
@@ -2522,11 +2530,10 @@ input[type="file"].field__input::file-selector-button:hover {
     animation: none;
   }
 
-  /* The orbit sweeps a circle wider than a phone screen, so most of the
-     flight happens off-canvas — an animation nobody sees, still costing
-     a frame every frame. */
-  .backdrop__orbit {
-    display: none;
+  /* The arrow's trip stays — it is a transform on a small group, which
+     is cheap — but the mark's own bloom does not. */
+  .wordmark__logo {
+    filter: none;
   }
 
   .landing {

@@ -75,9 +75,13 @@ export function Logo({ size = 40, title, className }: LogoProps) {
         <path d="M32 41 V25" />
         <path d="M41 41 V35" />
 
-        {/* Out through the corner. */}
-        <path d="M43 21 L57 7" />
-        <path d="M46 7 H57 V18" />
+        {/* Out through the corner. Grouped so the two strokes travel as
+            one piece when the backdrop sends it on its trip — see
+            `.logo__arrow` in global.css. */}
+        <g className="logo__arrow">
+          <path d="M43 21 L57 7" />
+          <path d="M46 7 H57 V18" />
+        </g>
       </g>
     </svg>
   );

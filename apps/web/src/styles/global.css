@@ -1425,7 +1425,19 @@ input[type="file"].field__input::file-selector-button:hover {
    * scroll to.
    */
   overflow: clip;
-  overflow-clip-margin: 5rem;
+  /*
+   * Generous on purpose. The halo behind each letter is `blur(30px)`
+   * over a copy scaled to 1.3, on type that reaches 9rem — so it spills
+   * roughly five rem past the text, and the parallax pushes it a further
+   * two. At 5rem this margin was cutting the glow off mid-arc, which is
+   * what made the colour around the wordmark look like a half circle.
+   *
+   * Raising it costs nothing that matters: `overflow: clip` is what
+   * stops the spill from extending the scrollable area, and it does that
+   * regardless of how wide the margin is. The margin only decides how
+   * much of the glow is allowed to be seen.
+   */
+  overflow-clip-margin: 16rem;
 }
 
 /* Holds the word and the colour orbiting it in one stacking context, so

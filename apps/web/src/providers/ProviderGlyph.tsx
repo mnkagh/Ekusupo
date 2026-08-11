@@ -35,30 +35,6 @@ export function ProviderGlyph({ glyph }: { glyph: ProviderDescriptor["glyph"] })
         </g>
       )}
 
-      {/* Apple Music — pink-to-red badge, white notes that bob. */}
-      {glyph === "note" && (
-        <g>
-          <defs>
-            <linearGradient id="ekusupo-am" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#FB5C74" />
-              <stop offset="100%" stopColor="#FA233B" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#ekusupo-am)" />
-          <g
-            className="provider-glyph__note"
-            stroke="#fff"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 33V15l14-3v18" />
-            <ellipse cx="16" cy="33" rx="4" ry="3.5" fill="#fff" />
-            <ellipse cx="30" cy="30" rx="4" ry="3.5" fill="#fff" />
-          </g>
-        </g>
-      )}
-
       {/* YouTube Music — red disc, white ring and beating triangle. */}
       {glyph === "play" && (
         <g>

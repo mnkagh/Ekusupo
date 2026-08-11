@@ -139,15 +139,6 @@ importers:
         specifier: workspace:*
         version: link:../upf
 
-  packages/providers/apple-music:
-    dependencies:
-      '@ekusupo/connector-sdk':
-        specifier: workspace:*
-        version: link:../../connector-sdk
-      '@ekusupo/upf':
-        specifier: workspace:*
-        version: link:../../upf
-
   packages/providers/spotify:
     dependencies:
       '@ekusupo/connector-sdk':
@@ -189,9 +180,6 @@ importers:
       '@ekusupo/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@ekusupo/provider-apple-music':
-        specifier: workspace:*
-        version: link:../../packages/providers/apple-music
       '@ekusupo/provider-spotify':
         specifier: workspace:*
         version: link:../../packages/providers/spotify

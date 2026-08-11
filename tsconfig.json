@@ -8,7 +8,6 @@
     { "path": "packages/connector-sdk" },
     { "path": "packages/upf" },
     { "path": "packages/matching" },
-    { "path": "packages/providers/apple-music" },
     { "path": "packages/providers/spotify" },
     { "path": "packages/providers/upf-file" },
     { "path": "packages/providers/youtube-music" },

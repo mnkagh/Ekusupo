@@ -196,24 +196,8 @@ export function registerConnectRoutes(app: FastifyInstance, deps: ConnectRoutesD
       if (!definition.isConfigured(creds)) {
         reply.code(400);
         return {
-          error: `${definition.displayName} isn't set up yet. Add your own ${definition.displayName} app credentials in Settings, or ask the operator to configure ${definition.requiredEnv.join(", ")}.`,
+          error: `${definition.displayName} isn't set up yet. Add your own ${definition.displayName} app on the Providers panel, or ask the operator to configure ${definition.requiredEnv.join(", ")}.`,
         };
-      }
-
-      // No redirect for a server-token provider: there is no user
-      // account to authorize, so the connection is established here.
-      if (definition.authKind === "serverToken") {
-        const session = await definition.buildServerSession!(creds);
-        try {
-          await connectionService.saveSession(user.id, definition.id, session);
-        } catch (error) {
-          console.error(
-            `[Ekusupo API] Could not store the ${definition.displayName} connection — check PROVIDER_TOKEN_ENCRYPTION_KEY`,
-            error,
-          );
-          return reply.redirect(`${webAppUrl}/?provider_error=storage_failed`);
-        }
-        return reply.redirect(`${webAppUrl}/?connected=${definition.id}`);
       }
 
       // Double-submit-cookie CSRF check, verified on the callback. An

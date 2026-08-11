@@ -20,7 +20,6 @@ const credentials = {
     clientSecret: "youtube-secret",
     redirectUri: "http://127.0.0.1:3000/providers/youtube-music/callback",
   },
-  "apple-music": { developerToken: "apple-developer-token" },
 };
 
 /** Replaces only the network-touching half of a definition. */
@@ -74,10 +73,9 @@ describe("GET /providers/catalog", () => {
     );
 
     // Honest per provider rather than a blanket claim: only Spotify has
-    // credentials here, and the other two must say so.
+    // credentials here, and the other must say so.
     expect(byId.spotify).toBe(true);
     expect(byId["youtube-music"]).toBe(false);
-    expect(byId["apple-music"]).toBe(false);
   });
 
   it("names the environment variables an operator is missing", async () => {
@@ -151,31 +149,6 @@ describe("GET /providers/:provider/connect", () => {
     expect(decodeURIComponent(location)).toContain("https://www.googleapis.com/auth/youtube&");
     expect(location).not.toContain("youtube.force-ssl");
     expect(location).not.toContain("youtubepartner");
-  });
-
-  it("connects a server-token provider without any redirect to the provider", async () => {
-    app = await buildServer({ providerCredentials: credentials });
-    const cookie = await signUpAndGetCookie();
-
-    const response = await app.inject({
-      method: "GET",
-      url: "/providers/apple-music/connect",
-      cookies: { ekusupo_session: cookie },
-    });
-
-    // Apple's catalogue is read with a server-signed developer token, so
-    // there is no user account to authorize and no provider to visit.
-    expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toContain("connected=apple-music");
-
-    const list = await app.inject({
-      method: "GET",
-      url: "/providers",
-      cookies: { ekusupo_session: cookie },
-    });
-    expect(list.json().providers.map((p: { provider: string }) => p.provider)).toContain(
-      "apple-music",
-    );
   });
 
   it("refuses with the missing variables named when a provider isn't configured", async () => {
@@ -284,13 +257,13 @@ describe("GET /providers/:provider/callback", () => {
     expect(callback.headers.location).toContain("provider_error=storage_failed");
   });
 
-  it("404s on the callback for a server-token provider — it has no code to exchange", async () => {
+  it("404s on the callback for a provider that is not in the registry", async () => {
     app = await buildServer({ providerCredentials: credentials });
     const cookie = await signUpAndGetCookie();
 
     const response = await app.inject({
       method: "GET",
-      url: "/providers/apple-music/callback?code=x&state=y",
+      url: "/providers/not-a-provider/callback?code=x&state=y",
       cookies: { ekusupo_session: cookie },
     });
 

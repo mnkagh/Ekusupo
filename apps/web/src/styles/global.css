@@ -177,12 +177,11 @@ input {
      takes the form of the strokes — a `box-shadow` would halo the square
      bounding box instead. Three passes: a tight bright core, a mid
      spread, and a wide soft bloom. */
-  /* Neutral light rather than coloured. Built from the page's own text
-     colour, so it is a white glow on the dark theme and a soft ink
-     shadow on the light one, instead of a colour that only works on
-     one. */
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
-    drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
+  /* Neutral light rather than coloured, and tight to the strokes. A
+     wide soft bloom out here rendered as its own faint disc behind the
+     wordmark — another circle competing with the halo. */
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text-primary) 40%, transparent))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--text-primary) 18%, transparent));
   animation: backdrop-pulse 9s var(--ease-in-out) infinite;
 }
 
@@ -330,13 +329,18 @@ input {
 .backdrop__scrim {
   position: absolute;
   inset: 0;
-  /* `farthest-side` here, deliberately the opposite of the halo: this
-     one has to reach the corners to darken them, and it must not start
-     shading until well past where the halo ends. */
+  /*
+   * A continuous falloff with no plateau. Holding fully transparent out
+   * to a fixed radius and only then starting to darken put a visible
+   * edge exactly at that radius — a second circle sitting under the
+   * halo, centred on the viewport rather than on the wordmark, so it
+   * read as off-centre too. Starting the ramp at zero means there is no
+   * radius where anything visibly begins.
+   */
   background: radial-gradient(
-    circle farthest-side at 50% 50%,
-    transparent 55%,
-    color-mix(in srgb, var(--surface-void) 55%, transparent) 100%
+    circle farthest-corner at 50% 50%,
+    transparent 0%,
+    color-mix(in srgb, var(--surface-void) 40%, transparent) 100%
   );
 }
 
@@ -438,12 +442,12 @@ input {
 @keyframes backdrop-pulse {
   0%,
   100% {
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
-      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text-primary) 40%, transparent))
+      drop-shadow(0 0 18px color-mix(in srgb, var(--text-primary) 18%, transparent));
   }
   50% {
-    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--text-primary) 60%, transparent))
-      drop-shadow(0 0 56px color-mix(in srgb, var(--text-primary) 30%, transparent));
+    filter: drop-shadow(0 0 11px color-mix(in srgb, var(--text-primary) 55%, transparent))
+      drop-shadow(0 0 30px color-mix(in srgb, var(--text-primary) 26%, transparent));
   }
 }
 
@@ -1605,17 +1609,21 @@ input[type="file"].field__input::file-selector-button:hover {
   translate: -50% -50%;
 
   /*
-   * Clear in the middle and coloured from the letters outward. The word
-   * sits inside roughly the first third of the radius, so the first stop
-   * holds transparent to there — colour laid over the glyphs would grey
-   * them down, and the point is a ring of light *around* the word.
+   * A continuous falloff with no plateau anywhere.
+   *
+   * Holding fully transparent out to 30% and only then introducing
+   * colour put a hard edge at exactly that radius — a small bright ring
+   * sitting in the middle of the word, which is not what a halo looks
+   * like. Every stop here differs from its neighbour, so there is no
+   * radius at which anything visibly starts or stops; the centre is
+   * merely faint rather than empty.
    */
   background: radial-gradient(
     circle closest-side,
-    transparent 30%,
-    color-mix(in srgb, var(--spectrum-1) 26%, transparent) 46%,
-    color-mix(in srgb, var(--spectrum-2) 30%, transparent) 64%,
-    color-mix(in srgb, var(--spectrum-3) 22%, transparent) 82%,
+    color-mix(in srgb, var(--spectrum-2) 6%, transparent) 0%,
+    color-mix(in srgb, var(--spectrum-1) 20%, transparent) 34%,
+    color-mix(in srgb, var(--spectrum-2) 26%, transparent) 58%,
+    color-mix(in srgb, var(--spectrum-3) 16%, transparent) 78%,
     transparent 100%
   );
 

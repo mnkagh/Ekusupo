@@ -196,12 +196,7 @@ describe("UpfScreen", () => {
     stubApi({
       catalog: [
         { id: "youtube-music", displayName: "YouTube Music", authKind: "oauth2", configured: true },
-        {
-          id: "apple-music",
-          displayName: "Apple Music",
-          authKind: "serverToken",
-          configured: false,
-        },
+        { id: "spotify", displayName: "Spotify", authKind: "oauth2", configured: false },
       ],
     });
     render(<UpfScreen />);
@@ -212,7 +207,7 @@ describe("UpfScreen", () => {
     await waitFor(() => {
       expect(within(select).getByText("YouTube Music")).toBeDefined();
     });
-    expect(within(select).queryByText("Apple Music")).toBeNull();
+    expect(within(select).queryByText("Spotify")).toBeNull();
     expect(within(select).getByText("A UPF file (download)")).toBeDefined();
   });
 

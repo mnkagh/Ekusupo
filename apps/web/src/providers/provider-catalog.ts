@@ -37,14 +37,6 @@ export const PROVIDER_CATALOG: ProviderDescriptor[] = [
     glyph: "wave",
   },
   {
-    id: "apple-music",
-    name: "Apple Music",
-    capability: "Catalogue search — reads with a server token",
-    availability: "available",
-    accent: ["#fa2f56", "#ff7a8a"],
-    glyph: "note",
-  },
-  {
     id: "youtube-music",
     name: "YouTube Music",
     capability: "Read playlists from your YouTube account",

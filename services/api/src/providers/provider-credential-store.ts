@@ -108,7 +108,7 @@ export class PostgresProviderCredentialStore {
       return {
         provider: row.provider,
         clientIdPreview: previewClientId(credentials.clientId),
-        hasSecret: Boolean(credentials.clientSecret ?? credentials.developerToken),
+        hasSecret: Boolean(credentials.clientSecret),
         redirectUri: credentials.redirectUri,
         updatedAt: row.updatedAt.toISOString(),
       };

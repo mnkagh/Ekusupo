@@ -36,9 +36,6 @@ async function main(): Promise<void> {
         clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
         redirectUri: process.env.YOUTUBE_REDIRECT_URI,
       },
-      "apple-music": {
-        developerToken: process.env.APPLE_MUSIC_DEVELOPER_TOKEN,
-      },
     },
     providerRoutesConfig: {
       spotifyClientId: process.env.SPOTIFY_CLIENT_ID,

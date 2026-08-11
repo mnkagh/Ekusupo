@@ -20,7 +20,7 @@ function isUsable(
   credentials: ProviderCredentials | undefined,
 ): credentials is ProviderCredentials {
   if (!credentials) return false;
-  return Boolean((credentials.clientId && credentials.clientSecret) ?? credentials.developerToken);
+  return Boolean(credentials.clientId && credentials.clientSecret);
 }
 
 /**

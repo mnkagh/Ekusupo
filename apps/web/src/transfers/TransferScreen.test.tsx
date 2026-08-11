@@ -292,12 +292,7 @@ describe("TransferScreen — writing for real", () => {
     stubApi({
       catalog: [
         { id: "youtube-music", displayName: "YouTube Music", authKind: "oauth2", configured: true },
-        {
-          id: "apple-music",
-          displayName: "Apple Music",
-          authKind: "serverToken",
-          configured: false,
-        },
+        { id: "spotify", displayName: "Spotify", authKind: "oauth2", configured: false },
       ],
     });
     render(<TransferScreen />);
@@ -308,7 +303,7 @@ describe("TransferScreen — writing for real", () => {
     });
     // Offering a provider the server cannot construct would only produce
     // a rejection after the click.
-    expect(within(select).queryByText("Apple Music")).toBeNull();
+    expect(within(select).queryByText("Spotify")).toBeNull();
     // Always present, needs nothing connected.
     expect(within(select).getByText("A UPF file (download)")).toBeDefined();
   });

@@ -26,13 +26,6 @@ const CATALOG = {
       requiredEnv: ["SPOTIFY_CLIENT_ID"],
     },
     {
-      id: "apple-music",
-      displayName: "Apple Music",
-      authKind: "serverToken",
-      configured: false,
-      requiredEnv: ["APPLE_MUSIC_DEVELOPER_TOKEN"],
-    },
-    {
       id: "youtube-music",
       displayName: "YouTube Music",
       authKind: "oauth2",
@@ -102,9 +95,6 @@ describe("ProvidersScreen", () => {
     render(<ProvidersScreen />);
 
     expect(await screen.findByText("Set up YouTube Music with your own app")).toBeDefined();
-    // Including Apple Music, which takes a developer token rather than a
-    // client id — still something a user can paste.
-    expect(screen.getByText("Set up Apple Music with your own app")).toBeDefined();
   });
 
   it("keeps it as a quiet advanced option where the server can already connect", async () => {

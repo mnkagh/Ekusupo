@@ -9,7 +9,6 @@ import type { StoredCredentialSummary } from "../api/providers-client.js";
 const CONSOLE_URLS: Record<string, string> = {
   spotify: "https://developer.spotify.com/dashboard",
   "youtube-music": "https://console.cloud.google.com/apis/credentials",
-  "apple-music": "https://developer.apple.com/account/resources/authkeys/list",
 };
 
 export interface ProviderCredentialsFormProps {
@@ -17,12 +16,6 @@ export interface ProviderCredentialsFormProps {
   displayName: string;
   /** What is already stored, if anything. Never contains the secret. */
   summary?: StoredCredentialSummary;
-  /**
-   * How this provider authorizes. `serverToken` providers (Apple Music)
-   * take a single signed developer token instead of a client id and
-   * secret, so they get a different field.
-   */
-  authKind: "oauth2" | "serverToken";
   /**
    * True when nothing else can make this provider work — the deployment
    * has no credentials for it. Then supplying your own app is the only
@@ -56,7 +49,6 @@ export function ProviderCredentialsForm({
   providerId,
   displayName,
   summary,
-  authKind,
   required,
   onChanged,
 }: ProviderCredentialsFormProps) {
@@ -66,21 +58,17 @@ export function ProviderCredentialsForm({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
-  const [developerToken, setDeveloperToken] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const clientIdField = useId();
   const secretField = useId();
   const redirectField = useId();
-  const tokenField = useId();
-  const usesToken = authKind === "serverToken";
 
   const openForm = () => {
     setOpen(true);
     setStatus({ kind: "idle" });
     setClientId("");
     setClientSecret("");
-    setDeveloperToken("");
     // Prefilled, because it has to match the provider's dashboard
     // character for character and typing it by hand is the single most
     // common way this goes wrong. The API's own port, not the page's.
@@ -94,16 +82,12 @@ export function ProviderCredentialsForm({
     setStatus({ kind: "saving" });
 
     void providersClient
-      .saveCredentials(
-        providerId,
-        usesToken ? { developerToken } : { clientId, clientSecret, redirectUri },
-      )
+      .saveCredentials(providerId, { clientId, clientSecret, redirectUri })
       .then(() => {
         setStatus({ kind: "saved" });
         // Cleared once exchanged for a stored, encrypted copy — there is
         // no reason to keep a secret sitting in a form field.
         setClientSecret("");
-        setDeveloperToken("");
         onChanged();
       })
       .catch((error: unknown) => {
@@ -176,74 +160,47 @@ export function ProviderCredentialsForm({
             <a href={CONSOLE_URLS[providerId]} target="_blank" rel="noreferrer noopener">
               {displayName}&apos;s developer console
             </a>
-            {usesToken
-              ? ", then paste the developer token it issues."
-              : ", add the redirect URI below to it exactly as shown, then paste its ID and secret here."}{" "}
-            Whatever you paste is encrypted before it is stored and never sent back to this page.
+            , add the redirect URI below to it exactly as shown, then paste its ID and secret here.
+            The secret is encrypted before it is stored and never sent back to this page.
           </p>
 
-          {usesToken ? (
-            <>
-              <label className="field__label" htmlFor={tokenField}>
-                Developer token
-              </label>
-              <input
-                id={tokenField}
-                className="field__input"
-                type="password"
-                autoComplete="off"
-                value={developerToken}
-                onChange={(event) => setDeveloperToken(event.target.value)}
-              />
-              <p className="transfer-form__hint">
-                A JWT you sign with a MusicKit key from a paid Apple Developer account. It grants
-                catalogue access only — reading your own Apple library needs a Music-User-Token that
-                this server cannot obtain.
-              </p>
-            </>
-          ) : (
-            <>
-              <label className="field__label" htmlFor={clientIdField}>
-                Client ID
-              </label>
-              <input
-                id={clientIdField}
-                className="field__input"
-                autoComplete="off"
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-              />
+          <label className="field__label" htmlFor={clientIdField}>
+            Client ID
+          </label>
+          <input
+            id={clientIdField}
+            className="field__input"
+            autoComplete="off"
+            value={clientId}
+            onChange={(event) => setClientId(event.target.value)}
+          />
 
-              <label className="field__label" htmlFor={secretField}>
-                Client secret
-              </label>
-              <input
-                id={secretField}
-                className="field__input"
-                type="password"
-                autoComplete="off"
-                value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
-              />
+          <label className="field__label" htmlFor={secretField}>
+            Client secret
+          </label>
+          <input
+            id={secretField}
+            className="field__input"
+            type="password"
+            autoComplete="off"
+            value={clientSecret}
+            onChange={(event) => setClientSecret(event.target.value)}
+          />
 
-              <label className="field__label" htmlFor={redirectField}>
-                Redirect URI
-              </label>
-              <input
-                id={redirectField}
-                className="field__input"
-                value={redirectUri}
-                onChange={(event) => setRedirectUri(event.target.value)}
-              />
-            </>
-          )}
+          <label className="field__label" htmlFor={redirectField}>
+            Redirect URI
+          </label>
+          <input
+            id={redirectField}
+            className="field__input"
+            value={redirectUri}
+            onChange={(event) => setRedirectUri(event.target.value)}
+          />
 
           <button
             type="submit"
             className="btn btn--connect"
-            disabled={
-              status.kind === "saving" || (usesToken ? !developerToken : !clientId || !clientSecret)
-            }
+            disabled={status.kind === "saving" || !clientId || !clientSecret}
           >
             {status.kind === "saving" ? "Saving…" : "Save and enable"}
           </button>

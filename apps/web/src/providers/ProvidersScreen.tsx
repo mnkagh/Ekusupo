@@ -129,7 +129,6 @@ function ProviderTile({
           providerId={descriptor.id}
           displayName={descriptor.name}
           summary={credentialSummary}
-          authKind={catalogEntry.authKind}
           required={!connectable}
           onChanged={onCredentialsChanged}
         />

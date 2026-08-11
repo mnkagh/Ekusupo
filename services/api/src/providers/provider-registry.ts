@@ -1,26 +1,25 @@
 import type { AuthSession, MusicProvider } from "@ekusupo/connector-sdk";
-import { createAppleMusicProvider } from "@ekusupo/provider-apple-music";
 import { createSpotifyProvider } from "@ekusupo/provider-spotify";
 import { createYouTubeMusicProvider } from "@ekusupo/provider-youtube-music";
 
 /**
- * How a provider is connected. The two shapes differ enough that a
- * single code path cannot serve both honestly:
+ * How a provider is connected.
  *
- * - `oauth2` — a redirect to the provider, then a callback carrying a
- *   code the server exchanges for tokens. Spotify and YouTube.
- * - `serverToken` — no user redirect at all. Apple Music's catalogue is
- *   read with a developer token the operator signs out of band, so
- *   "connecting" is a server-side capability check, not a login.
+ * One shape today: a redirect to the provider, then a callback carrying
+ * a code the server exchanges for tokens. Kept as a named field rather
+ * than assumed, because it is what clients read to decide which
+ * connect affordance to show — but there is deliberately no second
+ * member. A `serverToken` mode existed for Apple Music, whose catalogue
+ * was read with a developer token signed out of band; with that
+ * provider gone, nothing implemented it, and an unimplemented branch is
+ * worse than an absent one.
  */
-export type ProviderAuthKind = "oauth2" | "serverToken";
+export type ProviderAuthKind = "oauth2";
 
 export interface ProviderCredentials {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
-  /** Apple only: the signed JWT identifying the app. */
-  developerToken?: string;
 }
 
 export interface ProviderDefinition {
@@ -33,8 +32,6 @@ export interface ProviderDefinition {
   buildAuthorizeUrl?: (credentials: ProviderCredentials, state: string) => string;
   /** oauth2 only: turns the callback code into a session. */
   exchangeCode?: (credentials: ProviderCredentials, code: string) => Promise<AuthSession>;
-  /** serverToken only: builds the session from server configuration. */
-  buildServerSession?: (credentials: ProviderCredentials) => Promise<AuthSession>;
   /** Names the env vars an operator must set, for error messages. */
   requiredEnv: string[];
   /** Reports whether this provider is usable with the credentials given. */
@@ -133,21 +130,6 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
         },
       };
     },
-  },
-  {
-    id: "apple-music",
-    displayName: "Apple Music",
-    authKind: "serverToken",
-    requiredEnv: ["APPLE_MUSIC_DEVELOPER_TOKEN"],
-    isConfigured: (c) => Boolean(c.developerToken),
-    createProvider: (c) => createAppleMusicProvider({ developerToken: c.developerToken }),
-    buildServerSession: async (c) => ({
-      method: "oauth2",
-      // Catalogue-only. Reaching a listener's own library additionally
-      // needs a Music-User-Token from MusicKit in the browser, which
-      // this flow deliberately does not attempt to obtain.
-      raw: { developerToken: c.developerToken ?? "" },
-    }),
   },
 ];
 

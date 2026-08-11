@@ -105,3 +105,65 @@ describe("matchTrack", () => {
     expect(outcome.decision?.alternatives).toHaveLength(1);
   });
 });
+
+describe("titles outside the Latin alphabet", () => {
+  /**
+   * The regression this guards is not a missed match but a *wrong* one.
+   * Normalization used to delete every non-ASCII character, so two
+   * unrelated Japanese songs by the same artist both reduced to an empty
+   * title, compared equal, and were reported as a confident match — the
+   * wrong track written to the destination, with a report saying it
+   * worked.
+   */
+  it("does not match two different Japanese songs by the same artist", () => {
+    const query = track({
+      id: "src-1",
+      title: "夜に駆ける",
+      artists: [{ id: "a1", name: "YOASOBI" }],
+    });
+    const wrongSong = track({
+      id: "dst-1",
+      title: "群青",
+      artists: [{ id: "a1", name: "YOASOBI" }],
+    });
+
+    expect(matchTrack(query, [wrongSong]).decision).toBeUndefined();
+  });
+
+  it("still matches the same Japanese song", () => {
+    const query = track({
+      id: "src-1",
+      title: "夜に駆ける",
+      artists: [{ id: "a1", name: "YOASOBI" }],
+    });
+    const sameSong = track({
+      id: "dst-1",
+      title: "夜に駆ける",
+      artists: [{ id: "a2", name: "YOASOBI" }],
+    });
+
+    expect(matchTrack(query, [sameSong]).decision?.method).toBe("normalized_title_artist");
+  });
+
+  it("matches across an accent difference, which used to be missed", () => {
+    const query = track({
+      id: "src-1",
+      title: "Hoppípolla",
+      artists: [{ id: "a1", name: "Sigur Rós" }],
+    });
+    const candidate = track({
+      id: "dst-1",
+      title: "Hoppipolla",
+      artists: [{ id: "a2", name: "Sigur Ros" }],
+    });
+
+    expect(matchTrack(query, [candidate]).decision?.method).toBe("normalized_title_artist");
+  });
+
+  it("refuses to match two tracks whose titles are only punctuation", () => {
+    const query = track({ id: "src-1", title: "???", artists: [{ id: "a1", name: "Someone" }] });
+    const other = track({ id: "dst-1", title: "!!!", artists: [{ id: "a1", name: "Someone" }] });
+
+    expect(matchTrack(query, [other]).decision).toBeUndefined();
+  });
+});

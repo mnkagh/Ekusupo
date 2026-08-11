@@ -42,6 +42,29 @@ ambiguity:
 6. Explicit or clean version compatibility (a signal used to adjust
    confidence/risk, not a hard filter — see below).
 
+### What "normalized" means
+
+Layers 3 and 4 compare folded strings, and the fold is deliberately
+script-aware (`packages/matching/src/normalize.ts`):
+
+- **Every script is kept.** Letters and digits are matched with
+  `\p{L}`/`\p{N}`, not `a-z0-9`. An earlier version used the ASCII range,
+  which deleted the whole of any non-Latin title — so "夜に駆ける" and
+  "群青" both became the empty string and _matched each other_. That is
+  the failure worth remembering here: not a missed match, but a
+  confident wrong one, reported as a success.
+- **Latin accents are folded**, so "Sigur Rós" matches "Sigur Ros".
+  Only the U+0300–U+036F combining marks are stripped.
+- **Japanese voiced sound marks are not.** U+3099/U+309A are also
+  combining marks, but が is not "か with an accent" — stripping them
+  would merge different words, reintroducing the same bug in a subtler
+  form.
+- **Compatibility-folded first** (NFKC), so full-width "ＴＯＫＹＯ"
+  matches "TOKYO".
+- **A title that folds to nothing never matches.** A track called "♥"
+  or "???" falls through to no-match rather than matching every other
+  track that also folded to nothing.
+
 ## What's deferred to Phase 7?
 
 Layers 7-10 — featured-artist handling, regional availability, popularity/

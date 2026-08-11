@@ -30,10 +30,21 @@ function titleArtistMatches(query: Track, candidate: Track): boolean {
   const queryArtist = primaryArtistName(query);
   const candidateArtist = primaryArtistName(candidate);
   if (!queryArtist || !candidateArtist) return false;
-  return (
-    normalizeTitle(query.title) === normalizeTitle(candidate.title) &&
-    normalizeArtistName(queryArtist) === normalizeArtistName(candidateArtist)
-  );
+
+  const queryTitle = normalizeTitle(query.title);
+  const candidateTitle = normalizeTitle(candidate.title);
+  // Two titles that both fold away to nothing are not the same title —
+  // they are two titles this layer cannot compare. A track called "?"
+  // or "♥", or one whose only word is a stripped edition marker, must
+  // fall through to "no match" rather than matching everything else
+  // that also folded to nothing.
+  if (!queryTitle || !candidateTitle) return false;
+
+  const queryName = normalizeArtistName(queryArtist);
+  const candidateName = normalizeArtistName(candidateArtist);
+  if (!queryName || !candidateName) return false;
+
+  return queryTitle === candidateTitle && queryName === candidateName;
 }
 
 /**

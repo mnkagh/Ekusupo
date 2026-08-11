@@ -84,28 +84,26 @@ describe("ProvidersScreen", () => {
     expect(screen.getAllByText("Needs an app").length).toBeGreaterThan(0);
   });
 
-  it("tells the user how to enable it themselves, not which env vars an operator forgot", async () => {
+  it("says who can fix an unconfigured provider, not which env vars are missing", async () => {
     // Naming server environment variables is useless to someone who is
-    // not the operator — and wrong now that they can supply their own
-    // app instead of waiting for one.
+    // not the operator.
     vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
-    expect(await screen.findByText(/Add your own YouTube Music app/)).toBeDefined();
-    expect(screen.getAllByRole("button", { name: "Use my own app" }).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/ask whoever runs it to add YouTube Music/)).toBeDefined();
   });
 
-  it("offers to use your own app only where a user can actually supply one", async () => {
-    // Apple Music authorizes with a developer token the operator signs
-    // out of band; there is nothing for an end user to paste.
+  it("keeps bringing your own app as an advanced option, not a primary one", async () => {
+    // Connecting through the provider's own sign-in page is what almost
+    // everyone should do; pasting a client id is the self-hosting
+    // escape hatch and must not compete with it for attention.
     vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
     await screen.findByRole("link", { name: "Connect Spotify" });
-    // Spotify and YouTube are oauth2; Apple Music is not.
-    expect(screen.getAllByRole("button", { name: /Use my own app|Replace my app/ })).toHaveLength(
-      2,
-    );
+    // Spotify and YouTube are oauth2; Apple Music uses a server-signed
+    // developer token, so there is nothing a user could paste.
+    expect(screen.getAllByText(/Advanced: use your own developer app/)).toHaveLength(2);
   });
 
   it("shows which of your own apps is in use, without ever showing the secret", async () => {
@@ -117,7 +115,7 @@ describe("ProvidersScreen", () => {
     );
     render(<ProvidersScreen />);
 
-    expect(await screen.findByText(/Your app · abcd…wxyz/)).toBeDefined();
+    expect(await screen.findByText(/Using your own app · abcd…wxyz/)).toBeDefined();
   });
 
   it("shows Connected and a Disconnect button when a provider is connected", async () => {

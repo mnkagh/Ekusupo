@@ -90,11 +90,10 @@ function ProviderTile({
           ? `Connected on ${formatConnectedAt(connection.connectedAt)}`
           : connectable
             ? descriptor.capability
-            : // Actionable by the person reading it. This used to name
-              // the environment variables an operator would have to set,
-              // which is useless to a user who is not the operator — and
-              // wrong now that they can supply their own app instead.
-              `Add your own ${descriptor.name} app below to enable it.`}
+            : // Says who can fix it and how. Naming server environment
+              // variables, as this once did, is useless to someone who
+              // is not the operator.
+              `Not set up on this server yet — ask whoever runs it to add ${descriptor.name}.`}
       </p>
 
       <div className="tile__action">

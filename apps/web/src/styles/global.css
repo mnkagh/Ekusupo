@@ -75,22 +75,15 @@ input {
    * centre are what make it a halo.
    */
   /*
-   * `closest-side` is doing the important work. A radial gradient sizes
-   * itself to the farthest *corner* by default, so on a 16:9 screen its
-   * radius is about twice the half-height — the coloured part ran off
-   * the top and bottom of the viewport and only the middle band was ever
-   * visible, which is exactly why it read as half a circle. Sizing to
-   * the nearest edge puts the whole circle on screen.
+   * Flat ink, no colour wash.
+   *
+   * There was a spectrum halo here, and it was competing with the one
+   * behind the EKUSUPO wordmark on the landing — two coloured glows on
+   * the same screen, one of them enormous and behind everything. The
+   * colour belongs to the wordmark; the backdrop mark is a watermark and
+   * reads better as plain light on plain ink.
    */
-  background:
-    radial-gradient(
-      circle closest-side at 50% 50%,
-      var(--glow-violet) 0%,
-      var(--glow-teal) 38%,
-      var(--glow-amber) 62%,
-      transparent 100%
-    ),
-    var(--surface-void);
+  background: var(--surface-void);
 
   /* Decoration: never selectable, never a click target, never copied. */
   pointer-events: none;
@@ -162,8 +155,12 @@ input {
      takes the form of the strokes — a `box-shadow` would halo the square
      bounding box instead. Three passes: a tight bright core, a mid
      spread, and a wide soft bloom. */
-  filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
-    drop-shadow(0 0 70px var(--spectrum-3));
+  /* Neutral light rather than coloured. Built from the page's own text
+     colour, so it is a white glow on the dark theme and a soft ink
+     shadow on the light one, instead of a colour that only works on
+     one. */
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
+    drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
   animation: backdrop-pulse 9s var(--ease-in-out) infinite;
 }
 
@@ -242,29 +239,31 @@ input {
 }
 
 /*
- * Solid spectrum stops rather than the `--glow-*` tokens: those are
- * low-alpha by design and simply vanished underneath the whole mark's
- * own bloom. A flash has to out-shine what is already lit or it is not a
- * flash.
+ * Neutral, like the rest of the backdrop mark — the spectrum belongs to
+ * the wordmark on the landing, not to the watermark behind it. The
+ * flash still has to out-shine the mark's resting glow, which is what
+ * the radii here are doing.
  */
 @keyframes arrow-flash {
   0%,
   8% {
-    filter: drop-shadow(0 0 4px var(--spectrum-1));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--text-primary) 40%, transparent));
   }
   /* Charges, then goes. */
   16% {
-    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 54px var(--spectrum-2));
+    filter: drop-shadow(0 0 26px var(--text-primary))
+      drop-shadow(0 0 54px color-mix(in srgb, var(--text-primary) 45%, transparent));
   }
   50% {
-    filter: drop-shadow(0 0 16px var(--spectrum-3)) drop-shadow(0 0 40px var(--spectrum-2));
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--text-primary) 60%, transparent));
   }
   /* Lands. */
   88% {
-    filter: drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 62px var(--spectrum-2));
+    filter: drop-shadow(0 0 30px var(--text-primary))
+      drop-shadow(0 0 62px color-mix(in srgb, var(--text-primary) 45%, transparent));
   }
   100% {
-    filter: drop-shadow(0 0 4px var(--spectrum-1));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--text-primary) 40%, transparent));
   }
 }
 
@@ -377,32 +376,34 @@ input {
  */
 @keyframes backdrop-flash {
   0% {
-    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
-      drop-shadow(0 0 70px var(--spectrum-3));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
+      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
   }
   /* The strike — instant, no approach. */
   2% {
-    filter: drop-shadow(0 0 30px #fff) drop-shadow(0 0 120px var(--spectrum-1))
-      drop-shadow(0 0 260px var(--spectrum-2));
+    filter: drop-shadow(0 0 34px var(--text-primary))
+      drop-shadow(0 0 130px color-mix(in srgb, var(--text-primary) 70%, transparent))
+      drop-shadow(0 0 260px color-mix(in srgb, var(--text-primary) 35%, transparent));
   }
   /* Falls away... */
   9% {
-    filter: drop-shadow(0 0 8px var(--spectrum-1)) drop-shadow(0 0 30px var(--spectrum-2))
-      drop-shadow(0 0 80px var(--spectrum-3));
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--text-primary) 50%, transparent))
+      drop-shadow(0 0 40px color-mix(in srgb, var(--text-primary) 25%, transparent));
   }
   /* ...and re-strikes, the way lightning does. */
   13% {
-    filter: drop-shadow(0 0 26px #fff) drop-shadow(0 0 100px var(--spectrum-1))
-      drop-shadow(0 0 220px var(--spectrum-2));
+    filter: drop-shadow(0 0 28px var(--text-primary))
+      drop-shadow(0 0 110px color-mix(in srgb, var(--text-primary) 60%, transparent))
+      drop-shadow(0 0 220px color-mix(in srgb, var(--text-primary) 30%, transparent));
   }
   22% {
-    filter: drop-shadow(0 0 14px var(--spectrum-1)) drop-shadow(0 0 60px var(--spectrum-2))
-      drop-shadow(0 0 150px var(--spectrum-3));
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--text-primary) 55%, transparent))
+      drop-shadow(0 0 64px color-mix(in srgb, var(--text-primary) 28%, transparent));
   }
   /* The long tail back to rest. */
   100% {
-    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
-      drop-shadow(0 0 70px var(--spectrum-3));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
+      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
   }
 }
 
@@ -415,12 +416,12 @@ input {
 @keyframes backdrop-pulse {
   0%,
   100% {
-    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
-      drop-shadow(0 0 70px var(--spectrum-3));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
+      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
   }
   50% {
-    filter: drop-shadow(0 0 12px var(--spectrum-1)) drop-shadow(0 0 46px var(--spectrum-2))
-      drop-shadow(0 0 110px var(--spectrum-3));
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--text-primary) 60%, transparent))
+      drop-shadow(0 0 56px color-mix(in srgb, var(--text-primary) 30%, transparent));
   }
 }
 
@@ -2132,12 +2133,32 @@ input[type="file"].field__input::file-selector-button:hover {
 /* Sits under the tile's own action row, separated by a hairline so the
    tile still reads as one card rather than two stacked. */
 .tile__credentials {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--line-faint);
+}
+
+/*
+ * Quiet, and quieter than the Connect button above it. This is the
+ * escape hatch for someone self-hosting, not the way most people should
+ * connect — sized and coloured to read that way rather than as a second
+ * equal choice.
+ */
+.tile__credentials-toggle {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-1) 0;
+}
+
+.tile__credentials-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.tile__credentials-toggle:hover,
+.tile__credentials-toggle:focus-visible {
+  color: var(--text-secondary);
 }
 
 .credentials__state {

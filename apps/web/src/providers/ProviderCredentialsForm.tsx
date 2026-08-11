@@ -103,23 +103,40 @@ export function ProviderCredentialsForm({
   };
 
   return (
-    <div className="tile__credentials">
-      <button
-        type="button"
-        className="btn btn--ghost btn--small"
-        onClick={() => (open ? setOpen(false) : openForm())}
+    <details className="tile__credentials" open={open}>
+      {/*
+        Collapsed, and labelled as advanced, because it is not the way
+        most people should connect. The ordinary path is the Connect
+        button above: it takes you to the provider's own login page,
+        where you sign in with your usual account and approve — no
+        developer app, no client id, nothing technical.
+        This exists for two narrower cases: running your own copy of
+        Ekusupo where nobody has configured that provider, and wanting
+        your transfers to run against your own API quota rather than
+        sharing this deployment's.
+      */}
+      <summary
+        className="tile__credentials-toggle"
+        onClick={(event) => {
+          event.preventDefault();
+          if (open) setOpen(false);
+          else openForm();
+        }}
       >
-        {open ? "Cancel" : summary ? "Replace my app" : "Use my own app"}
-      </button>
-
-      {summary && !open && (
-        <span className="credentials__state">Your app · {summary.clientIdPreview ?? "saved"}</span>
-      )}
+        {summary
+          ? `Using your own app · ${summary.clientIdPreview ?? "saved"}`
+          : "Advanced: use your own developer app"}
+      </summary>
 
       {open && (
         <form className="credentials__form" onSubmit={submit}>
           <p className="transfer-form__hint">
-            Create an app in{" "}
+            Most people should use <strong>Connect {displayName}</strong> above instead — it takes
+            you to {displayName}&apos;s own sign-in page and needs nothing technical from you.
+          </p>
+          <p className="transfer-form__hint">
+            Only if you are running your own copy of Ekusupo, or want transfers to use your own API
+            quota: create an app in{" "}
             <a href={CONSOLE_URLS[providerId]} target="_blank" rel="noreferrer noopener">
               {displayName}&apos;s developer console
             </a>
@@ -186,6 +203,6 @@ export function ProviderCredentialsForm({
           )}
         </form>
       )}
-    </div>
+    </details>
   );
 }

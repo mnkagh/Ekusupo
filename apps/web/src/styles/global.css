@@ -1569,37 +1569,16 @@ input[type="file"].field__input::file-selector-button:hover {
  * place in the app allowed to be loud, and at this blur radius an
  * unboosted gradient turns to grey mush.
  */
-.immersive__word span::before {
-  content: attr(data-char);
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-
-  color: transparent;
-  background: var(--spectrum);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-
-  /*
-   * Deliberately modest, and it stays that way.
-   *
-   * This is a *blur filter on text*, and there is one per letter — seven
-   * of them, each re-rasterised every frame while the gradient sweeps.
-   * Pushing the radius up to spread the glow wider made the whole page
-   * stutter, because cost here scales with the blur radius squared. The
-   * wide part of the halo is a plain radial gradient on
-   * `.immersive__stage` instead, which costs nothing; this layer only
-   * has to do the part a gradient cannot — hug the actual letterforms.
-   */
-  filter: blur(34px) saturate(1.9) brightness(1.4);
-  transform: scale(1.35);
-  opacity: 1;
-  pointer-events: none;
-
-  animation: sweep-spectrum 7s linear infinite;
-  animation-delay: calc(var(--i) * -0.8s);
-}
+/*
+ * There is deliberately no per-letter glow.
+ *
+ * Each letter used to carry a blurred, spectrum-filled copy of itself
+ * behind it. Seven of those overlapping in the middle of the word read
+ * as a small coloured blob sitting on the logo rather than as light
+ * around it — and being blur filters on text, they were also the most
+ * expensive thing on the page. The colour is the circle on
+ * `.immersive__stage`; the letters themselves stay clean.
+ */
 
 /*
  * The wide halo, as one gradient rather than a second blurred copy of
@@ -3121,8 +3100,10 @@ input[type="file"].field__input::file-selector-button:hover {
     background: none;
   }
 
-  .immersive__word span::before,
-  .immersive__word span::after,
+  /* Decoration carries no meaning, and forced-colors mode has no way to
+     render a gradient faithfully — so it goes rather than being
+     approximated. */
+  .immersive__stage::before,
   .backdrop {
     display: none;
   }

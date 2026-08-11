@@ -10,7 +10,7 @@ import type {
 } from "@ekusupo/connector-sdk";
 import { ConnectorError } from "@ekusupo/connector-sdk";
 import type { Playlist, Track, UpfDocument } from "@ekusupo/upf";
-import { UPF_FORMAT_NAME, UPF_FORMAT_VERSION } from "@ekusupo/upf";
+import { UPF_FORMAT_NAME, UPF_FORMAT_VERSION, parseUpfDocument } from "@ekusupo/upf";
 
 import { upfFileManifest } from "./manifest.js";
 
@@ -41,13 +41,33 @@ async function readDocument(filePath: string): Promise<UpfDocument> {
     throw new ConnectorError("unknown_error", `Could not read ${filePath}.`, { cause: error });
   }
 
+  let parsed: unknown;
   try {
-    return JSON.parse(raw) as UpfDocument;
+    parsed = JSON.parse(raw);
   } catch (error) {
     throw new ConnectorError("validation_error", `${filePath} is not valid JSON.`, {
       cause: error,
     });
   }
+
+  // Validated, not cast. `JSON.parse(raw) as UpfDocument` was a lie the
+  // type system had no way to check: a file that is valid JSON but the
+  // wrong shape — `{"playlists": null}`, or a bare array — got through
+  // here and then failed somewhere downstream as a TypeError about
+  // `.find` or `.push`, naming neither the file nor the problem. This is
+  // exactly what `parseUpfDocument` exists for.
+  const result = parseUpfDocument(parsed);
+  if (!result.ok) {
+    const detail = result.errors
+      .slice(0, 3)
+      .map((problem) => `${problem.path || "(document)"}: ${problem.message}`)
+      .join("; ");
+    throw new ConnectorError(
+      "validation_error",
+      `${filePath} is not a valid UPF document. ${detail}`,
+    );
+  }
+  return result.document;
 }
 
 async function writeDocument(filePath: string, document: UpfDocument): Promise<void> {

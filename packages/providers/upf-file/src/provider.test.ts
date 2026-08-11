@@ -107,3 +107,53 @@ describe("createUpfFileProvider", () => {
     });
   });
 });
+
+describe("a file that is JSON but not UPF", () => {
+  /**
+   * These used to get through `JSON.parse(raw) as UpfDocument` and fail
+   * later as a TypeError about `.find` or `.push` — an error naming
+   * neither the file nor what was wrong with it.
+   */
+  it.each([
+    [
+      "playlists missing",
+      { format: "upf", version: "0.1.0", createdAt: "2026-01-01T00:00:00.000Z" },
+    ],
+    [
+      "playlists null",
+      { format: "upf", version: "0.1.0", createdAt: "2026-01-01T00:00:00.000Z", playlists: null },
+    ],
+    ["a bare array", []],
+    ["a bare string", "not a document"],
+    ["an unrelated object", { hello: "world" }],
+  ])("refuses %s with a validation error naming the file", async (_case, contents) => {
+    await writeFile(filePath, JSON.stringify(contents), "utf-8");
+    const provider = createUpfFileProvider({ filePath });
+
+    await expect(provider.listPlaylists!(session)).rejects.toThrow(ConnectorError);
+    await expect(provider.listPlaylists!(session)).rejects.toThrow(/is not a valid UPF document/);
+  });
+
+  it("still reports malformed JSON separately from a wrong shape", async () => {
+    await writeFile(filePath, "{not json", "utf-8");
+    const provider = createUpfFileProvider({ filePath });
+
+    await expect(provider.listPlaylists!(session)).rejects.toThrow(/is not valid JSON/);
+  });
+
+  it("says which field was wrong, not just that something was", async () => {
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        format: "upf",
+        version: "0.1.0",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        playlists: [{ id: "p1", items: [] }],
+      }),
+      "utf-8",
+    );
+    const provider = createUpfFileProvider({ filePath });
+
+    await expect(provider.listPlaylists!(session)).rejects.toThrow(/title/);
+  });
+});

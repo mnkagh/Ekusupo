@@ -79,3 +79,39 @@ describe("SignInForm", () => {
     await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalledWith(userFixture));
   });
 });
+
+describe("after a successful sign-in", () => {
+  it("leaves the submit button usable, because the form is reused rather than remounted", async () => {
+    // The drawer keeps this form mounted while closed. Signing in, then
+    // out, then reopening the drawer returns to this same instance — and
+    // a form still stuck on "submitting" reopened with a disabled button
+    // and a not-allowed cursor, with no way to sign in again short of
+    // reloading the page.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ user: userFixture })),
+    );
+    const onSignedIn = vi.fn();
+    render(<SignInForm onSignedIn={onSignedIn} />);
+
+    fillAndSubmit("user@example.com", "correct horse battery", "Sign in");
+    await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalled());
+
+    const submit = screen.getByRole("button", { name: "Sign in" });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("does not keep the password in memory once it has been exchanged", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ user: userFixture })),
+    );
+    const onSignedIn = vi.fn();
+    render(<SignInForm onSignedIn={onSignedIn} />);
+
+    fillAndSubmit("user@example.com", "correct horse battery", "Sign in");
+    await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalled());
+
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+  });
+});

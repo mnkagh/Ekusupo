@@ -97,8 +97,14 @@ export function App() {
   return (
     <>
       {/* Set back further once signed in, so the workspace panels have
-          the foreground and the landing keeps the mark at full presence. */}
-      <Backdrop variant={auth.status === "signed-in" ? "dense" : "calm"} />
+          the foreground and the landing keeps the mark at full presence.
+          `shift` slides it clear of whichever drawer is open, so the mark
+          stays centred in the space actually left visible rather than
+          sitting half-covered. */}
+      <Backdrop
+        variant={auth.status === "signed-in" ? "dense" : "calm"}
+        shift={authDrawer.open ? "left" : settingsOpen ? "right" : "none"}
+      />
       <IntroScreen key={introRun} />
 
       {/*
@@ -128,28 +134,24 @@ export function App() {
 
               <div className="session">
                 <span className="session__identity">Signed in as {auth.user.email}</span>
-                <div className="session__actions">
-                  {/* Icon-only, with the label carried by `aria-label` and
-                      the native tooltip: side by side with "Sign out",
-                      two full-width buttons read as two equal choices,
-                      and settings is not one. */}
-                  <button
-                    type="button"
-                    className="btn btn--icon"
-                    onClick={() => setSettingsOpen(true)}
-                    aria-label="Settings"
-                    title="Settings"
-                  >
-                    <SettingsIcon size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--small"
-                    onClick={() => void handleSignOut()}
-                  >
-                    Sign out
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => void handleSignOut()}
+                >
+                  Sign out
+                </button>
+
+                {/* Below sign-out, and quieter than it: this is the way
+                    into preferences, not an action on the session. */}
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--with-glyph"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <SettingsIcon size={15} />
+                  Settings
+                </button>
               </div>
             </aside>
           )}

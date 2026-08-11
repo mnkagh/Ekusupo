@@ -3,6 +3,12 @@ import { Logo } from "../brand/Logo.js";
 export interface BackdropProps {
   /** `dense` is the signed-in workspace: the mark sits back further so it never competes with the panels. */
   variant?: "calm" | "dense";
+  /**
+   * Which way to slide out from under an open drawer. The auth drawer
+   * comes from the right, so the mark moves `left`; settings comes from
+   * the left, so it moves `right`.
+   */
+  shift?: "none" | "left" | "right";
 }
 
 /**
@@ -19,9 +25,9 @@ export interface BackdropProps {
  * Entirely decorative: `aria-hidden`, `pointer-events: none`, and
  * unselectable.
  */
-export function Backdrop({ variant = "calm" }: BackdropProps) {
+export function Backdrop({ variant = "calm", shift = "none" }: BackdropProps) {
   return (
-    <div className={`backdrop backdrop--${variant}`} aria-hidden="true">
+    <div className={`backdrop backdrop--${variant} backdrop--shift-${shift}`} aria-hidden="true">
       <div className="backdrop__mark">
         <Logo />
       </div>

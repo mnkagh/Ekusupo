@@ -43,6 +43,20 @@ export function SignInForm({ onSignedIn, initialMode = "sign-in", onCancel }: Si
         mode === "sign-in"
           ? await authClient.signIn(email, password)
           : await authClient.signUp(email, password);
+
+      /*
+       * Reset before handing off. This form is kept mounted inside the
+       * drawer rather than unmounted on close, so whatever state it ends
+       * in is the state it reopens in — and leaving `status` on
+       * "submitting" meant the submit button stayed `disabled`. Sign
+       * out, click Sign in again without reloading, and the button was
+       * dead with a not-allowed cursor.
+       *
+       * The password is cleared for its own sake: there is no reason to
+       * keep it in memory once it has been exchanged for a session.
+       */
+      setStatus("idle");
+      setPassword("");
       onSignedIn(user);
     } catch (error) {
       setStatus("failed");

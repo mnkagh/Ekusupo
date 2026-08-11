@@ -30,6 +30,21 @@ export function Drawer({ open, onClose, label, side = "right", children }: Drawe
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  /*
+   * `onClose` is almost always an inline arrow, so it is a new function
+   * on every render of the parent. Depending on it directly made this
+   * effect tear down and set up again on *every* re-render while the
+   * drawer was open — and its teardown calls `focus()`, which scrolls
+   * the focused element back into view. The page yanked itself upward
+   * whenever anything re-rendered, including while the user was
+   * scrolling. Holding it in a ref keeps the handler current without
+   * making it a trigger.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -40,11 +55,11 @@ export function Drawer({ open, onClose, label, side = "right", children }: Drawe
     const focusTarget =
       panelRef.current?.querySelector<HTMLElement>("input, select, textarea") ??
       panelRef.current?.querySelector<HTMLElement>("button");
-    focusTarget?.focus();
+    focusTarget?.focus({ preventScroll: true });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -70,9 +85,13 @@ export function Drawer({ open, onClose, label, side = "right", children }: Drawe
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused.current?.focus();
+      // `preventScroll`: returning focus is about the keyboard, not the
+      // viewport. Without it the browser scrolls whatever had focus back
+      // into view, which on a long page is a visible jump the user never
+      // asked for.
+      previouslyFocused.current?.focus({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <div className={`drawer drawer--${side} ${open ? "drawer--open" : ""}`}>

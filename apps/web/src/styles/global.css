@@ -86,6 +86,31 @@ input {
   display: grid;
   place-items: center;
   animation: backdrop-drift 26s var(--ease-in-out) infinite;
+  /* Matches the drawer's own travel, so the mark and the panel move as
+     one gesture rather than two things that happen to overlap. */
+  transition: translate var(--dur-slow) var(--ease-out);
+}
+
+/*
+ * `translate` rather than `transform`: the drift animation already owns
+ * `transform`, and setting both here would mean one silently winning.
+ * These are separate properties, so they compose instead of fighting.
+ */
+.backdrop--shift-left .backdrop__mark {
+  translate: -22% 0;
+}
+
+.backdrop--shift-right .backdrop__mark {
+  translate: 22% 0;
+}
+
+/* On a phone the drawer becomes a bottom sheet covering most of the
+   screen — there is no sideways space to move into. */
+@media (max-width: 40rem) {
+  .backdrop--shift-left .backdrop__mark,
+  .backdrop--shift-right .backdrop__mark {
+    translate: 0 -18%;
+  }
 }
 
 .backdrop__mark svg {
@@ -117,22 +142,66 @@ input {
 .backdrop__mark .logo__arrow {
   transform-box: view-box;
   transform-origin: 32px 32px;
-  animation: arrow-trip 7s var(--ease-in-out) infinite;
+  /*
+   * Two animations on one element, deliberately: the trip owns
+   * `transform`, the flash owns `filter`. Trying to put both in one
+   * keyframe set would mean every frame restating both properties, and
+   * the two have completely different rhythms — the arrow travels
+   * smoothly and flares in bursts.
+   */
+  animation:
+    arrow-trip 7s cubic-bezier(0.62, -0.35, 0.32, 1.32) infinite,
+    arrow-flash 7s var(--ease-in-out) infinite;
 }
 
+/*
+ * The cartoon timing lives in the easing rather than the keyframes: the
+ * curve above overshoots at both ends, so the arrow winds up slightly
+ * before it launches and overshoots its slot before settling back into
+ * it. That anticipate-and-settle is what separates a drawn animation
+ * from a linear tween.
+ */
 @keyframes arrow-trip {
   0%,
-  16% {
-    transform: rotate(0deg) translateX(0);
+  14% {
+    transform: rotate(0deg) translateX(0) scale(1);
   }
-  /* Pushed outward mid-flight — the translate is applied in the rotated
-     frame, so it reads as the arrow flying wide of the mark. */
-  50% {
-    transform: rotate(180deg) translateX(5px);
+  /* Squashes as it accelerates away... */
+  28% {
+    transform: rotate(70deg) translateX(7px) scale(0.88);
   }
-  84%,
+  /* ...stretches at full speed on the far side... */
+  55% {
+    transform: rotate(210deg) translateX(9px) scale(1.14);
+  }
+  /* ...and comes back in on the brakes. */
+  78% {
+    transform: rotate(330deg) translateX(3px) scale(0.95);
+  }
+  88%,
   100% {
-    transform: rotate(360deg) translateX(0);
+    transform: rotate(360deg) translateX(0) scale(1);
+  }
+}
+
+/* A charge before it goes and a burst as it lands, rather than an even
+   glow the whole way round. */
+@keyframes arrow-flash {
+  0%,
+  10% {
+    filter: drop-shadow(0 0 3px var(--spectrum-1));
+  }
+  14% {
+    filter: drop-shadow(0 0 22px var(--spectrum-1)) drop-shadow(0 0 44px var(--spectrum-2));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px var(--spectrum-3));
+  }
+  88% {
+    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 52px var(--spectrum-2));
+  }
+  100% {
+    filter: drop-shadow(0 0 3px var(--spectrum-1));
   }
 }
 
@@ -1857,43 +1926,17 @@ input[type="file"].field__input::file-selector-button:hover {
   letter-spacing: var(--track-normal);
 }
 
-/* Square, icon-only, and the same height as the small button beside it
-   so the pair sits on one line rather than stepping. */
-.btn--icon {
-  flex: none;
+/* Glyph and label on one optical line, with the gap between them set
+   here rather than as a margin on the icon. */
+.btn--with-glyph {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  color: var(--text-secondary);
-  background: var(--surface-base);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
-}
-
-.btn--icon:hover,
-.btn--icon:focus-visible {
-  color: var(--text-primary);
-  border-color: var(--line-strong);
-  background: var(--surface-raised);
-}
-
-.session__actions {
-  display: flex;
-  align-items: center;
   gap: var(--space-2);
 }
 
-/* The lone remaining button should fill the row, the icon should not. */
-.session__actions .btn--small {
-  flex: 1;
+.btn--with-glyph svg {
+  flex: none;
 }
 
 /* -------------------------------------------------------------- theme */

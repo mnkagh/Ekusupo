@@ -64,12 +64,23 @@ input {
   display: grid;
   place-items: center;
 
-  /* Colour wash under the mark, so the field is never flat even where
-     the letters do not reach. */
+  /*
+   * One halo, centred on the mark, expanding evenly outward.
+   *
+   * This used to be three ellipses at 60%/40%, 15%/75% and 85%/80% —
+   * offset from each other and from the mark they were supposed to be
+   * lighting. The result read as colour smeared across one side rather
+   * than as a glow coming *from* the logo, and where the wash ran out it
+   * looked like a circle cut in half. Concentric stops on the same
+   * centre are what make it a halo.
+   */
   background:
-    radial-gradient(ellipse 70% 55% at 60% 40%, var(--glow-violet), transparent 70%),
-    radial-gradient(ellipse 50% 45% at 15% 75%, var(--glow-teal), transparent 70%),
-    radial-gradient(ellipse 45% 40% at 85% 80%, var(--glow-amber), transparent 70%),
+    radial-gradient(
+      circle at 50% 50%,
+      var(--glow-violet) 0%,
+      var(--glow-teal) 28%,
+      transparent 62%
+    ),
     var(--surface-void);
 
   /* Decoration: never selectable, never a click target, never copied. */
@@ -152,8 +163,8 @@ input {
      takes the form of the strokes — a `box-shadow` would halo the square
      bounding box instead. Three passes: a tight bright core, a mid
      spread, and a wide soft bloom. */
-  filter: brightness(1.15) drop-shadow(0 0 10px var(--spectrum-2))
-    drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 80px var(--glow-violet));
+  filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
+    drop-shadow(0 0 70px var(--spectrum-3));
   animation: backdrop-pulse 9s var(--ease-in-out) infinite;
 }
 
@@ -258,33 +269,52 @@ input {
   }
 }
 
-/* Signed in, the mark drops back so the panels own the foreground. */
+/*
+ * On the landing the mark is the subject, so it is drawn at nearly full
+ * strength — it was at 0.3, which is what made it look washed out no
+ * matter how much glow was added behind it. Signed in it drops right
+ * back, because there the panels are the subject and the mark is
+ * wallpaper.
+ */
 .backdrop--calm .backdrop__mark {
-  opacity: 0.3;
+  opacity: 0.92;
 }
 
 .backdrop--dense .backdrop__mark {
-  opacity: 0.14;
+  opacity: 0.13;
 }
 
+/*
+ * Neon: a white-hot core with the spectrum as the light around it,
+ * rather than spectrum-coloured strokes that read as grey once dimmed.
+ * `--text-primary` rather than literal white so the light theme gets ink
+ * on paper instead of an invisible white mark.
+ *
+ * Landing only. In the workspace the mark stays on its own gradient,
+ * where at 13% opacity a white one would read as smudged fog.
+ */
+.backdrop--calm .backdrop__mark svg g {
+  stroke: var(--text-primary);
+}
+
+/*
+ * Darkens toward the edges so text at the margins keeps its contrast.
+ * Built from the page's own ink, so it darkens a dark theme and lightens
+ * a light one rather than dropping a black wash over paper.
+ *
+ * A single centred circle, not an ellipse plus a top-to-bottom linear
+ * fade. That combination shaded the bottom of the screen far more than
+ * the top, which cut the halo unevenly and was most of why it looked
+ * like half a circle.
+ */
 .backdrop__scrim {
   position: absolute;
   inset: 0;
-  /* Darkens toward the edges so text at the margins keeps its contrast.
-     Built from the page's own ink, so it darkens a dark theme and
-     lightens a light one rather than dropping a black wash over paper. */
-  background:
-    radial-gradient(
-      ellipse 70% 50% at 50% 50%,
-      transparent 25%,
-      color-mix(in srgb, var(--surface-void) 62%, transparent) 100%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-void) 62%, transparent) 0%,
-      transparent 22%,
-      color-mix(in srgb, var(--surface-void) 84%, transparent) 100%
-    );
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 42%,
+    color-mix(in srgb, var(--surface-void) 55%, transparent) 100%
+  );
 }
 
 /* Slow, wide, and never returning to exactly the same place at the same
@@ -329,39 +359,49 @@ input {
  * reads as the mark lighting up rather than as a glow switching on
  * behind it.
  */
+/*
+ * The strike is carried by the *radius* of the glow, not by
+ * `brightness`. The strokes are already near-white at rest, and
+ * brightening white produces nothing — an earlier version leaned on it
+ * and barely registered. Throwing the bloom out to three times its
+ * resting radius is what reads as a flash.
+ */
 @keyframes backdrop-flash {
   0% {
-    filter: brightness(1) saturate(1) drop-shadow(0 0 10px var(--spectrum-2))
-      drop-shadow(0 0 34px var(--glow-teal)) drop-shadow(0 0 90px var(--glow-violet));
+    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
+      drop-shadow(0 0 70px var(--spectrum-3));
   }
-  /* The strike. */
   10% {
-    filter: brightness(2.6) saturate(1.7) drop-shadow(0 0 34px var(--spectrum-1))
-      drop-shadow(0 0 90px var(--spectrum-2)) drop-shadow(0 0 190px var(--spectrum-3));
+    filter: drop-shadow(0 0 22px var(--spectrum-1)) drop-shadow(0 0 90px var(--spectrum-2))
+      drop-shadow(0 0 220px var(--spectrum-3));
   }
   /* Most of the fall happens fast, then it eases the rest of the way
      back — a hard cut to the resting state reads as a flicker. */
   35% {
-    filter: brightness(1.5) saturate(1.25) drop-shadow(0 0 20px var(--spectrum-1))
-      drop-shadow(0 0 60px var(--spectrum-2)) drop-shadow(0 0 130px var(--glow-violet));
+    filter: drop-shadow(0 0 13px var(--spectrum-1)) drop-shadow(0 0 55px var(--spectrum-2))
+      drop-shadow(0 0 140px var(--spectrum-3));
   }
   100% {
-    filter: brightness(1) saturate(1) drop-shadow(0 0 10px var(--spectrum-2))
-      drop-shadow(0 0 34px var(--glow-teal)) drop-shadow(0 0 90px var(--glow-violet));
+    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
+      drop-shadow(0 0 70px var(--spectrum-3));
   }
 }
 
 /* Breathing glow rather than opacity on the whole mark, so the light
    swells while the shape itself stays put. */
+/* Three radii, all on the same centre: a tight white-ish core, a
+   mid-range colour bloom, and a wide soft wash. Stacked that way the
+   light reads as coming off the strokes rather than as a rectangle of
+   haze behind them. */
 @keyframes backdrop-pulse {
   0%,
   100% {
-    filter: brightness(1.15) drop-shadow(0 0 10px var(--spectrum-2))
-      drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 80px var(--glow-violet));
+    filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
+      drop-shadow(0 0 70px var(--spectrum-3));
   }
   50% {
-    filter: brightness(1.35) drop-shadow(0 0 18px var(--spectrum-2))
-      drop-shadow(0 0 52px var(--spectrum-1)) drop-shadow(0 0 130px var(--glow-violet));
+    filter: drop-shadow(0 0 12px var(--spectrum-1)) drop-shadow(0 0 46px var(--spectrum-2))
+      drop-shadow(0 0 110px var(--spectrum-3));
   }
 }
 

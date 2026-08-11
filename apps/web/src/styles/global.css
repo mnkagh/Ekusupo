@@ -54,21 +54,6 @@ input {
   color: var(--text-primary);
 }
 
-/* Utility: spectrum-filled text. Falls back to solid colour where
-   background-clip:text is unsupported, rather than to invisible text. */
-.spectrum-text {
-  color: var(--spectrum-2);
-  background: var(--spectrum);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-@supports (-webkit-background-clip: text) or (background-clip: text) {
-  .spectrum-text {
-    color: transparent;
-  }
-}
-
 /* ----------------------------------------------------------- backdrop */
 
 .core-field {
@@ -453,13 +438,6 @@ input {
   font-style: italic;
 }
 
-.lede {
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
-  line-height: 1.55;
-  max-width: 42ch;
-}
-
 .section-title {
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -493,88 +471,6 @@ input {
     grid-column: 1;
     grid-row: auto;
   }
-}
-
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
-  gap: var(--space-8);
-  align-items: center;
-  padding: var(--space-7) 0;
-}
-
-@media (max-width: 72rem) {
-  .hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
-    padding: var(--space-5) 0;
-  }
-}
-
-.hero__copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-/* The vision diagram as an element, not a sentence describing one. */
-.flow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--track-wide);
-}
-
-.flow__node {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: rgb(23 18 37 / 70%);
-  transition:
-    border-color var(--dur) var(--ease-out),
-    color var(--dur) var(--ease-out);
-}
-
-.flow__node:hover {
-  border-color: var(--line-strong);
-  color: var(--text-secondary);
-}
-
-.flow__node--core {
-  border-color: rgb(139 108 245 / 50%);
-  color: var(--text-primary);
-  box-shadow: 0 0 28px -10px var(--glow-violet);
-  position: relative;
-  overflow: hidden;
-}
-
-/* Signal passing through the core, continuously. */
-.flow__node--core::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 30%, rgb(52 224 208 / 28%) 50%, transparent 70%);
-  transform: translateX(-120%);
-  animation: signal-pass 3.6s var(--ease-in-out) infinite;
-}
-
-@keyframes signal-pass {
-  0%,
-  55% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-.flow__arrow {
-  color: var(--line-strong);
 }
 
 /* -------------------------------------------------------------- panel */
@@ -938,110 +834,6 @@ input[type="file"].field__input::file-selector-button:hover {
   }
 }
 
-/* -------------------------------------------------------------- lists */
-
-.provider-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.provider {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  background: var(--surface-base);
-  border: 1px solid var(--line-faint);
-  border-radius: var(--radius);
-  transition:
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out);
-}
-
-.provider:hover {
-  border-color: var(--line);
-  background: var(--surface-panel);
-  transform: translateX(3px);
-}
-
-.provider__identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.provider__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-/* Small enough to sit inside a row without turning it into a card. */
-.provider__glyph {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  flex: none;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  background: var(--surface-void);
-  transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
-}
-
-.provider--live .provider__glyph {
-  color: var(--accent-1);
-  border-color: color-mix(in srgb, var(--accent-1) 45%, transparent);
-}
-
-.provider:hover .provider__glyph {
-  color: var(--accent-1);
-}
-
-/* Planned providers stay legible but visibly inert — no accent on
-   hover, and no action that would fail if clicked. */
-.provider--planned {
-  opacity: 0.62;
-}
-
-.provider--planned:hover {
-  border-color: var(--line-faint);
-  background: var(--surface-base);
-}
-
-.provider__pending {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--track-wide);
-  color: var(--text-muted);
-}
-
-.provider__name {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  letter-spacing: var(--track-normal);
-}
-
-.provider__meta {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  letter-spacing: 0;
-}
-
 /* Dot plus label — never colour alone, so the meaning survives for
    anyone who can't separate the hues. */
 .status {
@@ -1182,13 +974,6 @@ input[type="file"].field__input::file-selector-button:hover {
   gap: var(--space-5);
   padding: var(--space-8) 0;
   max-width: 54rem;
-}
-
-.landing__actions {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin-top: var(--space-2);
 }
 
 /* The primary button is full-width inside the drawer, but must size to
@@ -1390,14 +1175,6 @@ input[type="file"].field__input::file-selector-button:hover {
   animation-delay: calc(var(--i) * -0.8s);
 }
 
-.immersive__lede {
-  font-family: var(--font-body);
-  font-size: var(--text-lg);
-  color: var(--text-secondary);
-  animation: rise var(--dur-slow) var(--ease-out) both;
-  animation-delay: 700ms;
-}
-
 .immersive__actions {
   display: flex;
   flex-direction: column;
@@ -1405,42 +1182,6 @@ input[type="file"].field__input::file-selector-button:hover {
   gap: var(--space-2);
   animation: rise var(--dur-slow) var(--ease-out) both;
   animation-delay: 820ms;
-}
-
-/* A single deliberate entry point, framed rather than filled. */
-.btn--enter {
-  padding: var(--space-3) var(--space-8);
-  background: transparent;
-  border-color: var(--line-strong);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-.btn--enter::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--spectrum);
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease-out);
-}
-
-.btn--enter span {
-  position: relative;
-  z-index: 1;
-  transition: color var(--dur) var(--ease-out);
-}
-
-.btn--enter:hover {
-  border-color: transparent;
-}
-
-.btn--enter:hover::after {
-  opacity: 1;
-}
-
-.btn--enter:hover span {
-  color: var(--text-inverse);
 }
 
 /* ------------------------------------------------------------- drawer */
@@ -1672,13 +1413,6 @@ input[type="file"].field__input::file-selector-button:hover {
 
 .tile:hover::before {
   opacity: 1;
-}
-
-/* Shown only for a connected provider: an unconnected entry needs no
-   marker, and a full column of inert bars would just be noise. */
-.tile__top {
-  display: flex;
-  align-items: center;
 }
 
 /*
@@ -1913,18 +1647,6 @@ input[type="file"].field__input::file-selector-button:hover {
     opacity: 1;
     transform: none;
   }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* ----------------------------------------------------------- transfer */
@@ -2448,9 +2170,22 @@ input[type="file"].field__input::file-selector-button:hover {
   line-height: 1.6;
 }
 
+/*
+ * A path into a rejected document reads like
+ * `playlists[0].items[12].track.artists[0].durationMs` — fifty-odd
+ * monospace characters with nothing the browser will break on. Wider
+ * than a 360px phone, and since the page root hides horizontal overflow
+ * the tail was clipped rather than scrollable: the one piece of
+ * information that says *which* field is wrong, unreadable on a phone.
+ */
 .upf__problems code {
   font-family: var(--font-mono);
   color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.upf__problems li {
+  overflow-wrap: break-word;
 }
 
 /* --------------------------------------------------------- small screens */
@@ -2645,8 +2380,7 @@ input[type="file"].field__input::file-selector-button:hover {
   .immersive__word span,
   .intro__letter,
   .wordmark__text,
-  .counter__value,
-  .spectrum-text {
+  .counter__value {
     -webkit-text-fill-color: currentcolor;
     color: CanvasText;
     background: none;

@@ -56,31 +56,138 @@ input {
 
 /* ----------------------------------------------------------- backdrop */
 
-.core-field {
+.backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
-  /* Stands in whenever WebGL is unavailable or the shader fails to
-     compile — a complete composition, not a blank fallback. */
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+
+  /* Colour wash under the mark, so the field is never flat even where
+     the letters do not reach. */
   background:
-    radial-gradient(ellipse 70% 55% at 60% 40%, rgb(139 108 245 / 16%), transparent 70%),
-    radial-gradient(ellipse 50% 45% at 15% 75%, rgb(52 224 208 / 10%), transparent 70%),
-    radial-gradient(ellipse 45% 40% at 85% 80%, rgb(255 178 107 / 8%), transparent 70%),
+    radial-gradient(ellipse 70% 55% at 60% 40%, var(--glow-violet), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 15% 75%, var(--glow-teal), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 85% 80%, var(--glow-amber), transparent 70%),
     var(--surface-void);
+
+  /* Decoration: never selectable, never a click target, never copied. */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.core-field__canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+/*
+ * The mark, at watermark scale. Sized in viewport units so it fills the
+ * shorter axis on any shape of screen rather than being cropped on one.
+ */
+.backdrop__mark {
+  display: grid;
+  place-items: center;
+  animation: backdrop-drift 26s var(--ease-in-out) infinite;
 }
 
-.core-field__scrim {
+.backdrop__mark svg {
+  width: clamp(18rem, 62vmin, 46rem);
+  height: auto;
+
+  /* The glow. `drop-shadow` follows the alpha of the shape, so the light
+     takes the form of the strokes — a `box-shadow` would halo the square
+     bounding box instead. Three passes: a tight bright core, a mid
+     spread, and a wide soft bloom. */
+  filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
+    drop-shadow(0 0 90px var(--glow-violet));
+  animation: backdrop-pulse 9s var(--ease-in-out) infinite;
+}
+
+/*
+ * The orbit. Rotating this wrapper carries the plane around a circle;
+ * the plane itself is pushed out to the radius and turned 90°, which
+ * points its nose along the tangent instead of straight outward. Doing
+ * it with two nested transforms rather than an SVG motion path keeps it
+ * on the compositor and costs no layout.
+ */
+.backdrop__orbit {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
+  animation: orbit 34s linear infinite;
+}
+
+.backdrop__plane {
+  width: clamp(2rem, 5.5vmin, 4.25rem);
+  height: auto;
+  transform: translateX(clamp(11rem, 38vmin, 28rem)) rotate(90deg);
+  filter: drop-shadow(0 0 8px var(--spectrum-1)) drop-shadow(0 0 24px var(--glow-teal));
+  opacity: 0.85;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Signed in, the mark drops back so the panels own the foreground. */
+.backdrop--calm .backdrop__mark {
+  opacity: 0.3;
+}
+
+.backdrop--dense .backdrop__mark {
+  opacity: 0.14;
+}
+
+.backdrop__scrim {
+  position: absolute;
+  inset: 0;
+  /* Darkens toward the edges so text at the margins keeps its contrast.
+     Built from the page's own ink, so it darkens a dark theme and
+     lightens a light one rather than dropping a black wash over paper. */
   background:
-    radial-gradient(ellipse 70% 50% at 50% 50%, transparent 25%, rgb(10 8 18 / 60%) 100%),
-    linear-gradient(180deg, rgb(10 8 18 / 60%) 0%, transparent 22%, rgb(10 8 18 / 82%) 100%);
+    radial-gradient(
+      ellipse 70% 50% at 50% 50%,
+      transparent 25%,
+      color-mix(in srgb, var(--surface-void) 62%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-void) 62%, transparent) 0%,
+      transparent 22%,
+      color-mix(in srgb, var(--surface-void) 84%, transparent) 100%
+    );
+}
+
+/* Slow, wide, and never returning to exactly the same place at the same
+   time — a short loop is what makes an ambient animation feel canned. */
+@keyframes backdrop-drift {
+  0%,
+  100% {
+    transform: translate3d(-1.2%, -1.5%, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(1.5%, 1.2%, 0) scale(1.03);
+  }
+  66% {
+    transform: translate3d(1%, -1.8%, 0) scale(0.985);
+  }
+}
+
+/* Breathing brightness rather than opacity on the whole mark, so the
+   glow swells while the shape itself stays put. */
+/* Breathing glow rather than opacity on the whole mark, so the light
+   swells while the shape itself stays put. */
+@keyframes backdrop-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px var(--spectrum-2)) drop-shadow(0 0 26px var(--glow-teal))
+      drop-shadow(0 0 66px var(--glow-violet));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px var(--spectrum-2)) drop-shadow(0 0 44px var(--glow-teal))
+      drop-shadow(0 0 110px var(--glow-violet));
+  }
 }
 
 /* ------------------------------------------------------ intro screen */
@@ -153,6 +260,10 @@ input {
   position: relative;
   display: flex;
   gap: clamp(0.1rem, 0.6vw, 0.5rem);
+  /* Same reason as `.immersive__word` — per-letter spans in a flex row
+     copy one letter per line. */
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     opacity 420ms var(--ease-out),
     transform 420ms var(--ease-out),
@@ -356,6 +467,13 @@ input {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* Sits above the name rather than beside it: the rail is a narrow
+   column, and a mark on the same line would eat a third of the width the
+   heading needs. */
+.wordmark__logo {
+  display: block;
 }
 
 /*
@@ -1081,6 +1199,17 @@ input[type="file"].field__input::file-selector-button:hover {
   gap: clamp(0.1rem, 0.8vw, 0.6rem);
   margin: 0;
   transform-style: preserve-3d;
+
+  /*
+   * Unselectable, because the letters are seven separate elements to
+   * give each one its own depth and decode timing — and a flex container
+   * blockifies its children, so dragging across the word copied it as
+   * "E\nK\nU\nS\nU\nP\nO", one letter per line. The heading's real name
+   * is on its `aria-label`; there is nothing here worth selecting, and
+   * a broken selection is worse than none.
+   */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .immersive__word span {
@@ -1233,12 +1362,43 @@ input[type="file"].field__input::file-selector-button:hover {
   transform: none;
 }
 
+/* Settings arrives from the opposite edge to auth, so the two never read
+   as one panel showing different contents. */
+.drawer--left .drawer__panel {
+  inset: 0 auto 0 0;
+  border-left: none;
+  border-right: 1px solid var(--line);
+  box-shadow: 32px 0 80px -32px rgb(0 0 0 / 90%);
+  transform: translateX(-102%);
+  /* Wider than auth: this one holds a whole settings surface, not a
+     four-field form, and it scrolls. */
+  width: min(34rem, 100%);
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+.drawer--left .drawer__rail {
+  inset: 0 0 0 auto;
+}
+
 @media (max-width: 40rem) {
   .drawer__panel {
     inset: auto 0 0 0;
     width: 100%;
     height: auto;
     border-left: none;
+    border-top: 1px solid var(--line);
+    transform: translateY(102%);
+  }
+
+  /* On a phone there is no "left edge" worth distinguishing — both
+     drawers become the same bottom sheet, which is the platform
+     convention anyway. */
+  .drawer--left .drawer__panel {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 88vh;
+    border-right: none;
     border-top: 1px solid var(--line);
     transform: translateY(102%);
   }
@@ -1647,6 +1807,159 @@ input[type="file"].field__input::file-selector-button:hover {
     opacity: 1;
     transform: none;
   }
+}
+
+/* ----------------------------------------------------------- settings */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-5) var(--space-4);
+}
+
+.settings__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line-faint);
+}
+
+/* Pushes the close button to the far edge without a spacer element. */
+.settings__header > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-right: auto;
+}
+
+.settings__section > .panel {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.settings__title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--track-normal);
+}
+
+/* Square, icon-only, and the same height as the small button beside it
+   so the pair sits on one line rather than stepping. */
+.btn--icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  color: var(--text-secondary);
+  background: var(--surface-base);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.btn--icon:hover,
+.btn--icon:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+
+.session__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The lone remaining button should fill the row, the icon should not. */
+.session__actions .btn--small {
+  flex: 1;
+}
+
+/* -------------------------------------------------------------- theme */
+
+.theme-toggle {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.theme-toggle__options {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.theme-toggle__option {
+  position: relative;
+  flex: 1 1 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* A real tap target, not a text link with a hit box the width of the
+     word — this sits in a settings list someone may be using on a
+     phone. */
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-base);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+/*
+ * The input is hidden visually but still focusable and still the thing
+ * being clicked — `display: none` would take it out of the tab order and
+ * break keyboard selection entirely, which is the usual way this pattern
+ * goes wrong.
+ */
+.theme-toggle__option input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.theme-toggle__option:hover {
+  color: var(--text-primary);
+  border-color: var(--line-strong);
+}
+
+.theme-toggle__option--active {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--spectrum-2) 55%, transparent);
+  background: var(--surface-raised);
+}
+
+/* Focus lives on the hidden input, so the ring has to be drawn on the
+   label that stands in for it. */
+.theme-toggle__option:has(input:focus-visible) {
+  outline: 2px solid var(--spectrum-2);
+  outline-offset: 2px;
 }
 
 /* ----------------------------------------------------------- transfer */
@@ -2201,10 +2514,18 @@ input[type="file"].field__input::file-selector-button:hover {
     padding: var(--space-4) var(--space-4) var(--space-6);
   }
 
-  /* The backdrop costs a full-screen WebGL surface for decoration that
-     is mostly hidden behind content at this width, and phones are where
-     that battery cost actually matters. */
-  .core-field__canvas {
+  /* The mark stays; its wide bloom does not. A large-radius drop-shadow
+     over a full-screen layer is the most expensive thing on this page,
+     and phones are where that actually costs battery. */
+  .backdrop__mark svg {
+    filter: none;
+    animation: none;
+  }
+
+  /* The orbit sweeps a circle wider than a phone screen, so most of the
+     flight happens off-canvas — an animation nobody sees, still costing
+     a frame every frame. */
+  .backdrop__orbit {
     display: none;
   }
 
@@ -2387,7 +2708,7 @@ input[type="file"].field__input::file-selector-button:hover {
   }
 
   .immersive__word span::before,
-  .core-field {
+  .backdrop {
     display: none;
   }
 }

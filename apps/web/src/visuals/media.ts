@@ -21,3 +21,20 @@ export function prefersReducedMotion(): boolean {
 export function hasFinePointer(): boolean {
   return query("(hover: hover) and (pointer: fine)");
 }
+
+/**
+ * Calls `handler` whenever the system's light/dark preference flips.
+ *
+ * Guarded the same way as the queries above: where `matchMedia` is
+ * missing there is no preference to change, so this subscribes to
+ * nothing and returns a cleanup that does nothing, rather than throwing
+ * inside an effect.
+ */
+export function onColorSchemeChange(handler: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+  const media = window.matchMedia("(prefers-color-scheme: light)");
+  media.addEventListener("change", handler);
+  return () => media.removeEventListener("change", handler);
+}

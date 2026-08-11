@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { AccountScreen } from "./account/AccountScreen.js";
 import { authClient } from "./api/auth-client.js";
+import { Logo } from "./brand/Logo.js";
 import type { PublicUser } from "./api/auth-client.js";
 import { AuthDrawer } from "./auth/AuthDrawer.js";
 import { ImmersiveLanding } from "./landing/ImmersiveLanding.js";
 import { ProvidersScreen } from "./providers/ProvidersScreen.js";
+import { SettingsDrawer } from "./settings/SettingsDrawer.js";
+import { SettingsIcon } from "./ui/icons.js";
 import { TransferScreen } from "./transfers/TransferScreen.js";
 import { UpfScreen } from "./transfers/UpfScreen.js";
-import { CoreField } from "./visuals/CoreField.js";
+import { Backdrop } from "./visuals/Backdrop.js";
 import { IntroScreen } from "./visuals/IntroScreen.js";
 
 type AuthState =
@@ -61,6 +63,18 @@ export function App() {
     open: false,
     mode: "sign-in",
   });
+  /*
+   * Bumped to replay the intro. `IntroScreen` unmounts itself once it has
+   * finished, so it cannot be re-triggered by a prop — changing its
+   * `key` mounts a fresh one, which is the whole mechanism.
+   *
+   * Signing in is the moment the workspace appears, and it deserves the
+   * same curtain the first load gets: the splash covers the switch from
+   * the landing to the workspace instead of the two swapping in a single
+   * frame.
+   */
+  const [introRun, setIntroRun] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const openAuth = (mode: "sign-in" | "sign-up") => setAuthDrawer({ open: true, mode });
   const closeAuth = () => setAuthDrawer((current) => ({ ...current, open: false }));
@@ -82,13 +96,10 @@ export function App() {
 
   return (
     <>
-      {/* A tighter, quicker field once signed in, so the workspace and
-          the landing differ in texture rather than only in content. */}
-      <CoreField
-        variant={auth.status === "signed-in" ? "dense" : "calm"}
-        respondToClick={auth.status !== "signed-in"}
-      />
-      <IntroScreen />
+      {/* Set back further once signed in, so the workspace panels have
+          the foreground and the landing keeps the mark at full presence. */}
+      <Backdrop variant={auth.status === "signed-in" ? "dense" : "calm"} />
+      <IntroScreen key={introRun} />
 
       {/*
         `shell--shifted` slides the page left while the auth drawer is
@@ -106,6 +117,9 @@ export function App() {
           {auth.status === "signed-in" && (
             <aside className="rail rise">
               <div className="wordmark">
+                {/* Decorative: the heading beside it already says the
+                    name, so the mark is not announced a second time. */}
+                <Logo size={26} className="wordmark__logo" />
                 <h1 className="wordmark__text">Ekusupo</h1>
                 <p className="wordmark__description">
                   Move playlists between music services, and see exactly what carried over.
@@ -114,13 +128,28 @@ export function App() {
 
               <div className="session">
                 <span className="session__identity">Signed in as {auth.user.email}</span>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => void handleSignOut()}
-                >
-                  Sign out
-                </button>
+                <div className="session__actions">
+                  {/* Icon-only, with the label carried by `aria-label` and
+                      the native tooltip: side by side with "Sign out",
+                      two full-width buttons read as two equal choices,
+                      and settings is not one. */}
+                  <button
+                    type="button"
+                    className="btn btn--icon"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Settings"
+                    title="Settings"
+                  >
+                    <SettingsIcon size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    onClick={() => void handleSignOut()}
+                  >
+                    Sign out
+                  </button>
+                </div>
               </div>
             </aside>
           )}
@@ -152,15 +181,23 @@ export function App() {
                 <TransferScreen />
                 <ProvidersScreen />
                 <UpfScreen />
-                <AccountScreen
-                  user={auth.user}
-                  onDeleted={() => setAuth({ status: "signed-out" })}
-                />
               </main>
             )}
           </div>
         </div>
       </div>
+
+      {auth.status === "signed-in" && (
+        <SettingsDrawer
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          user={auth.user}
+          onDeleted={() => {
+            setSettingsOpen(false);
+            setAuth({ status: "signed-out" });
+          }}
+        />
+      )}
 
       <AuthDrawer
         open={authDrawer.open}
@@ -169,6 +206,7 @@ export function App() {
         onSignedIn={(user) => {
           setAuthDrawer((current) => ({ ...current, open: false }));
           setAuth({ status: "signed-in", user });
+          setIntroRun((run) => run + 1);
         }}
       />
     </>

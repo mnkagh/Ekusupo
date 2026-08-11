@@ -14,6 +14,11 @@
  * print does it — pure white on near-black vibrates.
  */
 :root {
+  /* The default, and what `data-theme="dark"` resolves to. Declared so
+     form controls, scrollbars and the like are drawn dark by the
+     browser rather than light-on-dark. */
+  color-scheme: dark;
+
   /* Surfaces — violet-shifted ink. */
   --surface-void: #0a0812;
   --surface-base: #100c1c;
@@ -107,6 +112,80 @@
   --shadow-lift:
     0 2px 4px rgb(0 0 0 / 50%), 0 24px 64px -16px rgb(0 0 0 / 80%),
     0 0 40px -20px var(--glow-violet);
+}
+
+/*
+ * Light theme.
+ *
+ * A remap of the same tokens, not a second design — every rule in
+ * global.css goes through these, so nothing below this line needs a
+ * light-specific selector.
+ *
+ * Two things do not simply invert:
+ *
+ * - **The spectrum.** Teal #34e0d0 and amber #ffb26b are luminous
+ *   against ink and nearly invisible against paper (around 1.6:1 on
+ *   white). The light stops are the same three hues taken darker and
+ *   slightly less saturated, so the teal→violet→amber shift still reads
+ *   as one family while clearing 4.5:1 on the surfaces they sit on.
+ * - **Elevation.** On ink, "raised" means lighter; on paper it means a
+ *   real shadow, because a lighter-than-white surface does not exist.
+ *   The raised/hover steps therefore go *down* in luminance here while
+ *   the shadows carry the lift.
+ *
+ * Applied two ways so both work: `data-theme` when the user has chosen,
+ * and `prefers-color-scheme` when they have not. The attribute wins,
+ * which is what makes an explicit choice stick on a system set to the
+ * other mode.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-void: #f4f2f9;
+  --surface-base: #ffffff;
+  --surface-panel: #fbfafe;
+  --surface-raised: #f1eef8;
+  --surface-hover: #e7e2f2;
+
+  --line-faint: #e7e2f0;
+  --line: #d4cce3;
+  --line-strong: #b3a8c9;
+
+  --text-primary: #171122;
+  --text-secondary: #4c4363;
+  --text-muted: #6c6383;
+  --text-inverse: #ffffff;
+
+  --spectrum-1: #0d8e84;
+  --spectrum-2: #6741d9;
+  --spectrum-3: #a8620c;
+
+  --spectrum: linear-gradient(
+    100deg,
+    var(--spectrum-1) 0%,
+    var(--spectrum-2) 48%,
+    var(--spectrum-3) 100%
+  );
+  --spectrum-soft: linear-gradient(
+    100deg,
+    rgb(13 142 132 / 12%),
+    rgb(103 65 217 / 12%),
+    rgb(168 98 12 / 12%)
+  );
+
+  --glow-teal: rgb(13 142 132 / 14%);
+  --glow-violet: rgb(103 65 217 / 16%);
+  --glow-amber: rgb(168 98 12 / 12%);
+
+  --danger: #c02648;
+  --danger-faint: rgb(192 38 72 / 8%);
+
+  /* Ink-coloured and soft, not black and heavy: a hard black shadow on
+     paper reads as a sticker rather than as elevation. */
+  --shadow-panel: 0 1px 2px rgb(23 17 34 / 6%), 0 12px 32px -12px rgb(23 17 34 / 14%);
+  --shadow-lift:
+    0 2px 4px rgb(23 17 34 / 7%), 0 24px 64px -20px rgb(23 17 34 / 18%),
+    0 0 40px -24px var(--glow-violet);
 }
 
 /*

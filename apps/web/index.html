@@ -3,7 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <title>Ekusupo</title>
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
+
+    <!--
+      Applies the saved theme before the first paint. Inline and
+      synchronous on purpose: anything deferred to the bundle runs after
+      the browser has already painted a frame, which is exactly the
+      white-then-dark (or dark-then-white) flash this avoids. Kept to the
+      one thing that must happen this early — see src/theme/theme.ts,
+      which owns the same storage key.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("ekusupo:theme");
+          var resolved =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", resolved);
+        } catch (error) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
 
     <!--
       viewport-fit=cover lets the layout reach under a notch; the CSS

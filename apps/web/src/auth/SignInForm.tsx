@@ -4,7 +4,6 @@ import type { FormEvent } from "react";
 import { authClient } from "../api/auth-client.js";
 import type { PublicUser } from "../api/auth-client.js";
 import { ApiError } from "../api/errors.js";
-import { useTilt } from "../visuals/useTilt.js";
 
 type Mode = "sign-in" | "sign-up";
 type Status = "idle" | "submitting" | "failed";
@@ -31,8 +30,10 @@ export function SignInForm({ onSignedIn, initialMode = "sign-in", onCancel }: Si
   const emailId = useId();
   const passwordId = useId();
 
-  const panelRef = useTilt<HTMLDivElement>({ max: 4, lift: 4 });
-
+  // No pointer tilt here, deliberately. This panel is a form someone is
+  // typing credentials into, not a card to admire — a surface that
+  // shifts under the cursor while you are aiming at a text field is
+  // motion working against the task.
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus("submitting");
@@ -50,7 +51,7 @@ export function SignInForm({ onSignedIn, initialMode = "sign-in", onCancel }: Si
   };
 
   return (
-    <div className="panel" ref={panelRef}>
+    <div className="panel">
       <div className="panel__header panel__header--split">
         <div>
           <span className="eyebrow eyebrow--signal">

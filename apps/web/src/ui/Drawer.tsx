@@ -48,6 +48,11 @@ export function Drawer({ open, onClose, label, side = "right", children }: Drawe
   useEffect(() => {
     if (!open) return;
 
+    // Locks the page behind the drawer. Kept in its own effect body
+    // rather than a second `useEffect` so the unlock is guaranteed to
+    // run with the same teardown that restores focus.
+    document.documentElement.classList.add("is-drawer-open");
+
     previouslyFocused.current = document.activeElement as HTMLElement | null;
 
     // Land inside the panel rather than at the top of the page behind
@@ -84,6 +89,7 @@ export function Drawer({ open, onClose, label, side = "right", children }: Drawe
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      document.documentElement.classList.remove("is-drawer-open");
       document.removeEventListener("keydown", handleKeyDown);
       // `preventScroll`: returning focus is about the keyboard, not the
       // viewport. Without it the browser scrolls whatever had focus back

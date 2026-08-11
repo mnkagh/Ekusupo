@@ -14,6 +14,28 @@ body,
   height: 100%;
 }
 
+html {
+  /*
+   * Reserves the scrollbar's width whether or not one is showing, so the
+   * page never shifts sideways the moment content grows past the fold or
+   * a drawer locks scrolling. Without it every appearance and
+   * disappearance of the scrollbar nudges the whole layout.
+   */
+  scrollbar-gutter: stable;
+}
+
+/*
+ * While a drawer is open the page behind it must not scroll. A modal
+ * that lets the background move under it is disorienting, and the wheel
+ * events land on whichever layer happens to be under the pointer.
+ * Paired with `scrollbar-gutter` above, so locking does not itself
+ * shift the layout.
+ */
+html.is-drawer-open,
+html.is-drawer-open body {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--surface-void);
@@ -1450,11 +1472,12 @@ input[type="file"].field__input::file-selector-button:hover {
    * regardless of how wide the margin is. The margin only decides how
    * much of the glow is allowed to be seen.
    *
-   * Sized for the *outer* halo, which is the widest thing here:
-   * `blur(110px)` on a copy scaled to 2.6, over type reaching 9rem,
-   * spills roughly fourteen rem past the text.
+   * Sized for the widest thing here: the stage's gradient halo, which
+   * reaches about eight rem past the word. Kept no larger than it needs
+   * to be — every rem of margin is more area the compositor has to keep
+   * around.
    */
-  overflow-clip-margin: 26rem;
+  overflow-clip-margin: 12rem;
 }
 
 /* Holds the word and the colour orbiting it in one stacking context, so
@@ -1558,15 +1581,18 @@ input[type="file"].field__input::file-selector-button:hover {
   background-clip: text;
 
   /*
-   * Blur and scale together, not blur alone. Blur spreads the light but
-   * keeps it centred on the glyph, so raising it by itself just softens
-   * the same footprint; scaling the copy up is what actually pushes the
-   * colour outward into a wider halo. Raised well past the earlier
-   * 30px/1.3 so the glow reads as a field of light around the word
-   * rather than an outline hugging it.
+   * Deliberately modest, and it stays that way.
+   *
+   * This is a *blur filter on text*, and there is one per letter — seven
+   * of them, each re-rasterised every frame while the gradient sweeps.
+   * Pushing the radius up to spread the glow wider made the whole page
+   * stutter, because cost here scales with the blur radius squared. The
+   * wide part of the halo is a plain radial gradient on
+   * `.immersive__stage` instead, which costs nothing; this layer only
+   * has to do the part a gradient cannot — hug the actual letterforms.
    */
-  filter: blur(56px) saturate(2) brightness(1.45);
-  transform: scale(1.85);
+  filter: blur(34px) saturate(1.9) brightness(1.4);
+  transform: scale(1.35);
   opacity: 1;
   pointer-events: none;
 
@@ -1574,29 +1600,50 @@ input[type="file"].field__input::file-selector-button:hover {
   animation-delay: calc(var(--i) * -0.8s);
 }
 
-/* A second, wider and fainter copy — the outer falloff. One layer at
-   this radius would either be too weak near the letters or too heavy at
-   the edge; two lets the halo stay bright at its core and still reach
-   a long way out. */
-.immersive__word span::after {
-  content: attr(data-char);
+/*
+ * The wide halo, as one gradient rather than a second blurred copy of
+ * every letter. A gradient is composited directly — no filter pass, no
+ * per-letter cost — so this can be as large as it likes.
+ */
+.immersive__stage::before {
+  content: "";
   position: absolute;
-  inset: 0;
+  /* Reaches well past the word without changing its box. */
+  inset: -60% -25%;
   z-index: -2;
   pointer-events: none;
 
-  color: transparent;
-  background: var(--spectrum);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
+  background:
+    radial-gradient(
+      ellipse 45% 55% at 30% 50%,
+      color-mix(in srgb, var(--spectrum-1) 30%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50% 60% at 55% 45%,
+      color-mix(in srgb, var(--spectrum-2) 34%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 45% 55% at 78% 55%,
+      color-mix(in srgb, var(--spectrum-3) 28%, transparent),
+      transparent 70%
+    );
 
-  filter: blur(110px) saturate(2.2) brightness(1.5);
-  transform: scale(2.6);
-  opacity: 0.75;
+  animation: halo-breathe 12s var(--ease-in-out) infinite;
+}
 
-  animation: sweep-spectrum 11s linear infinite;
-  animation-delay: calc(var(--i) * -0.8s);
+/* Scale only, and on a single element — cheap enough to run forever. */
+@keyframes halo-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 .immersive__actions {
@@ -1627,8 +1674,14 @@ input[type="file"].field__input::file-selector-button:hover {
   border: none;
   padding: 0;
   cursor: pointer;
-  background: rgb(6 4 12 / 68%);
-  backdrop-filter: blur(6px) saturate(120%);
+  background: rgb(6 4 12 / 74%);
+  /*
+   * No `backdrop-filter`. Blurring everything behind a full-screen
+   * element forces the browser to re-read and re-blur the whole page on
+   * every frame the drawer animates — and on this page "everything
+   * behind" includes an animated gradient halo and a glowing mark. A
+   * slightly heavier flat wash gets the same separation for free.
+   */
   opacity: 0;
   transition: opacity var(--dur) var(--ease-out);
 }

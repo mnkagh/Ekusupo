@@ -129,6 +129,16 @@ input {
   height: auto;
 
   /*
+   * An SVG clips to its viewBox by default. The arrow's orbit takes it
+   * well outside a 64×64 box — its far corner sits about 35 units from
+   * the centre, and the mid-flight push widens that further — so half of
+   * every lap was being cut off at the edge, and the mark looked sliced.
+   * Letting it paint outside is what the orbit needs; the backdrop
+   * around it still clips at the viewport.
+   */
+  overflow: visible;
+
+  /*
    * The pointer parallax lands here rather than on `.backdrop__mark`,
    * which owns `translate` for the drawer shift — and that shift is
    * transitioned over 0.7s. Sharing the property would run every pointer
@@ -142,8 +152,8 @@ input {
      takes the form of the strokes — a `box-shadow` would halo the square
      bounding box instead. Three passes: a tight bright core, a mid
      spread, and a wide soft bloom. */
-  filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
-    drop-shadow(0 0 90px var(--glow-violet));
+  filter: brightness(1.15) drop-shadow(0 0 10px var(--spectrum-2))
+    drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 80px var(--glow-violet));
   animation: backdrop-pulse 9s var(--ease-in-out) infinite;
 }
 
@@ -279,16 +289,23 @@ input {
 
 /* Slow, wide, and never returning to exactly the same place at the same
    time — a short loop is what makes an ambient animation feel canned. */
+/*
+ * Scale only — no translation.
+ *
+ * The drift used to nudge the mark a percent or two off centre, which
+ * over a 26-second loop meant it was almost never actually centred, and
+ * on a narrow window the offset was the difference between fitting and
+ * being clipped. Breathing in place keeps it alive without ever leaving
+ * the middle of the screen; the pointer parallax on the landing is the
+ * one thing that moves it, and only while the cursor is moving.
+ */
 @keyframes backdrop-drift {
   0%,
   100% {
-    transform: translate3d(-0.8%, -1%, 0) scale(1);
+    transform: scale(1);
   }
-  33% {
-    transform: translate3d(1%, 0.8%, 0) scale(1.02);
-  }
-  66% {
-    transform: translate3d(0.7%, -1.2%, 0) scale(0.99);
+  50% {
+    transform: scale(1.025);
   }
 }
 
@@ -304,20 +321,33 @@ input {
   animation: backdrop-flash 1100ms var(--ease-out);
 }
 
+/*
+ * `brightness` and `saturate` alongside the shadows, because a
+ * drop-shadow only adds light *around* a shape — it cannot make the
+ * shape itself brighter, which is why an earlier version of this barely
+ * registered. Lifting the strokes and flaring the halo together is what
+ * reads as the mark lighting up rather than as a glow switching on
+ * behind it.
+ */
 @keyframes backdrop-flash {
   0% {
-    filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
-      drop-shadow(0 0 90px var(--glow-violet));
+    filter: brightness(1) saturate(1) drop-shadow(0 0 10px var(--spectrum-2))
+      drop-shadow(0 0 34px var(--glow-teal)) drop-shadow(0 0 90px var(--glow-violet));
   }
-  /* The strike: solid spectrum stops, not the low-alpha glow tokens,
-     so it genuinely out-shines the resting state. */
-  12% {
-    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 70px var(--spectrum-2))
-      drop-shadow(0 0 150px var(--spectrum-3));
+  /* The strike. */
+  10% {
+    filter: brightness(2.6) saturate(1.7) drop-shadow(0 0 34px var(--spectrum-1))
+      drop-shadow(0 0 90px var(--spectrum-2)) drop-shadow(0 0 190px var(--spectrum-3));
+  }
+  /* Most of the fall happens fast, then it eases the rest of the way
+     back — a hard cut to the resting state reads as a flicker. */
+  35% {
+    filter: brightness(1.5) saturate(1.25) drop-shadow(0 0 20px var(--spectrum-1))
+      drop-shadow(0 0 60px var(--spectrum-2)) drop-shadow(0 0 130px var(--glow-violet));
   }
   100% {
-    filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
-      drop-shadow(0 0 90px var(--glow-violet));
+    filter: brightness(1) saturate(1) drop-shadow(0 0 10px var(--spectrum-2))
+      drop-shadow(0 0 34px var(--glow-teal)) drop-shadow(0 0 90px var(--glow-violet));
   }
 }
 
@@ -326,12 +356,12 @@ input {
 @keyframes backdrop-pulse {
   0%,
   100% {
-    filter: drop-shadow(0 0 8px var(--spectrum-2)) drop-shadow(0 0 26px var(--glow-teal))
-      drop-shadow(0 0 66px var(--glow-violet));
+    filter: brightness(1.15) drop-shadow(0 0 10px var(--spectrum-2))
+      drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 80px var(--glow-violet));
   }
   50% {
-    filter: drop-shadow(0 0 14px var(--spectrum-2)) drop-shadow(0 0 44px var(--glow-teal))
-      drop-shadow(0 0 110px var(--glow-violet));
+    filter: brightness(1.35) drop-shadow(0 0 18px var(--spectrum-2))
+      drop-shadow(0 0 52px var(--spectrum-1)) drop-shadow(0 0 130px var(--glow-violet));
   }
 }
 
@@ -2028,43 +2058,18 @@ input[type="file"].field__input::file-selector-button:hover {
   line-height: 1.5;
 }
 
-.credentials {
+/* Sits under the tile's own action row, separated by a hairline so the
+   tile still reads as one card rather than two stacked. */
+.tile__credentials {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-faint);
 }
 
-.credentials__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.credentials__item {
-  padding: var(--space-3);
-  border: 1px solid var(--line-faint);
-  border-radius: var(--radius);
-  background: var(--surface-base);
-}
-
-.credentials__row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.credentials__name {
-  font-weight: 600;
-}
-
-/* Pushes the button to the right edge and takes the slack, so rows line
-   up regardless of how long a provider's name is. */
 .credentials__state {
-  margin-right: auto;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }

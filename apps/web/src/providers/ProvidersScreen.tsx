@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
 
 import { providersClient } from "../api/providers-client.js";
-import type { CatalogProvider, ConnectedProvider } from "../api/providers-client.js";
+import type {
+  CatalogProvider,
+  ConnectedProvider,
+  StoredCredentialSummary,
+} from "../api/providers-client.js";
 import { useTilt } from "../visuals/useTilt.js";
 import { PROVIDER_CATALOG } from "./provider-catalog.js";
 import type { ProviderDescriptor } from "./provider-catalog.js";
+import { ProviderCredentialsForm } from "./ProviderCredentialsForm.js";
 import { ProviderGlyph } from "./ProviderGlyph.js";
 
 type ListState =
   | { status: "loading" }
-  | { status: "loaded"; providers: ConnectedProvider[]; catalog: CatalogProvider[] };
+  | {
+      status: "loaded";
+      providers: ConnectedProvider[];
+      catalog: CatalogProvider[];
+      credentials: StoredCredentialSummary[];
+    };
 
 function formatConnectedAt(iso: string): string {
   const date = new Date(iso);
@@ -22,8 +32,11 @@ interface TileProps {
   /** What the server reports for this provider; absent means it isn't in the registry. */
   catalogEntry?: CatalogProvider;
   connection?: ConnectedProvider;
+  /** The caller's own app for this provider, if they have stored one. */
+  credentialSummary?: StoredCredentialSummary;
   disconnecting: boolean;
   onDisconnect: (provider: string) => void;
+  onCredentialsChanged: () => void;
   index: number;
 }
 
@@ -40,8 +53,10 @@ function ProviderTile({
   descriptor,
   catalogEntry,
   connection,
+  credentialSummary,
   disconnecting,
   onDisconnect,
+  onCredentialsChanged,
   index,
 }: TileProps) {
   const tiltRef = useTilt<HTMLLIElement>({ max: 7, lift: 8 });
@@ -75,9 +90,11 @@ function ProviderTile({
           ? `Connected on ${formatConnectedAt(connection.connectedAt)}`
           : connectable
             ? descriptor.capability
-            : // Names what the operator is missing rather than a vague
-              // "unavailable" the user can do nothing with.
-              `Needs ${catalogEntry?.requiredEnv.join(", ") ?? "server configuration"}`}
+            : // Actionable by the person reading it. This used to name
+              // the environment variables an operator would have to set,
+              // which is useless to a user who is not the operator — and
+              // wrong now that they can supply their own app instead.
+              `Add your own ${descriptor.name} app below to enable it.`}
       </p>
 
       <div className="tile__action">
@@ -86,9 +103,7 @@ function ProviderTile({
           {connected ? "Connected" : connectable ? "Not connected" : "Unavailable"}
         </span>
 
-        {!connectable ? (
-          <span className="tile__pending">Not configured</span>
-        ) : connected ? (
+        {connected ? (
           <button
             type="button"
             className="btn btn--ghost"
@@ -97,12 +112,26 @@ function ProviderTile({
           >
             {disconnecting ? "Disconnecting…" : "Disconnect"}
           </button>
-        ) : (
+        ) : connectable ? (
           <a className="btn btn--connect" href={providersClient.getConnectUrl(descriptor.id)}>
             Connect {descriptor.name}
           </a>
+        ) : (
+          <span className="tile__pending">Needs an app</span>
         )}
       </div>
+
+      {/* Only for providers that authorize a user account. Apple Music
+          connects with a server-signed developer token, which is not
+          something an end user can supply. */}
+      {catalogEntry?.authKind === "oauth2" && (
+        <ProviderCredentialsForm
+          providerId={descriptor.id}
+          displayName={descriptor.name}
+          summary={credentialSummary}
+          onChanged={onCredentialsChanged}
+        />
+      )}
     </li>
   );
 }
@@ -121,13 +150,19 @@ export function ProvidersScreen() {
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   const reload = () => {
-    // Both in one pass: the catalog says what is connectable, the
-    // connection list says what already is.
-    void Promise.all([providersClient.listProviders(), providersClient.listCatalog()])
-      .then(([{ providers }, { providers: catalog }]) => {
-        setState({ status: "loaded", providers, catalog });
+    // Three in one pass: the catalog says what is connectable, the
+    // connection list says what already is, and the credential
+    // summaries say which of those are usable because of the user's own
+    // app rather than the server's.
+    void Promise.all([
+      providersClient.listProviders(),
+      providersClient.listCatalog(),
+      providersClient.listCredentials(),
+    ])
+      .then(([{ providers }, { providers: catalog }, { credentials }]) => {
+        setState({ status: "loaded", providers, catalog, credentials });
       })
-      .catch(() => setState({ status: "loaded", providers: [], catalog: [] }));
+      .catch(() => setState({ status: "loaded", providers: [], catalog: [], credentials: [] }));
   };
 
   useEffect(reload, []);
@@ -142,6 +177,7 @@ export function ProvidersScreen() {
 
   const connections = state.status === "loaded" ? state.providers : [];
   const catalog = state.status === "loaded" ? state.catalog : [];
+  const credentials = state.status === "loaded" ? state.credentials : [];
   const liveCount = connections.length;
 
   return (
@@ -176,8 +212,10 @@ export function ProvidersScreen() {
                 descriptor={descriptor}
                 catalogEntry={catalog.find((entry) => entry.id === descriptor.id)}
                 connection={connections.find((entry) => entry.provider === descriptor.id)}
+                credentialSummary={credentials.find((entry) => entry.provider === descriptor.id)}
                 disconnecting={disconnecting === descriptor.id}
                 onDisconnect={handleDisconnect}
+                onCredentialsChanged={reload}
               />
             ))}
           </ul>

@@ -17,6 +17,19 @@ export interface ProviderCredentialsFormProps {
   displayName: string;
   /** What is already stored, if anything. Never contains the secret. */
   summary?: StoredCredentialSummary;
+  /**
+   * How this provider authorizes. `serverToken` providers (Apple Music)
+   * take a single signed developer token instead of a client id and
+   * secret, so they get a different field.
+   */
+  authKind: "oauth2" | "serverToken";
+  /**
+   * True when nothing else can make this provider work — the deployment
+   * has no credentials for it. Then supplying your own app is the only
+   * route, and presenting it as an "advanced" aside would hide the one
+   * control that does anything.
+   */
+  required: boolean;
   onChanged: () => void;
 }
 
@@ -43,23 +56,31 @@ export function ProviderCredentialsForm({
   providerId,
   displayName,
   summary,
+  authKind,
+  required,
   onChanged,
 }: ProviderCredentialsFormProps) {
-  const [open, setOpen] = useState(false);
+  // Open from the start when there is no other way to enable the
+  // provider — the form is the point of the tile at that moment.
+  const [open, setOpen] = useState(required && !summary);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
+  const [developerToken, setDeveloperToken] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const clientIdField = useId();
   const secretField = useId();
   const redirectField = useId();
+  const tokenField = useId();
+  const usesToken = authKind === "serverToken";
 
   const openForm = () => {
     setOpen(true);
     setStatus({ kind: "idle" });
     setClientId("");
     setClientSecret("");
+    setDeveloperToken("");
     // Prefilled, because it has to match the provider's dashboard
     // character for character and typing it by hand is the single most
     // common way this goes wrong. The API's own port, not the page's.
@@ -73,10 +94,16 @@ export function ProviderCredentialsForm({
     setStatus({ kind: "saving" });
 
     void providersClient
-      .saveCredentials(providerId, { clientId, clientSecret, redirectUri })
+      .saveCredentials(
+        providerId,
+        usesToken ? { developerToken } : { clientId, clientSecret, redirectUri },
+      )
       .then(() => {
         setStatus({ kind: "saved" });
+        // Cleared once exchanged for a stored, encrypted copy — there is
+        // no reason to keep a secret sitting in a form field.
         setClientSecret("");
+        setDeveloperToken("");
         onChanged();
       })
       .catch((error: unknown) => {
@@ -116,7 +143,9 @@ export function ProviderCredentialsForm({
         sharing this deployment's.
       */}
       <summary
-        className="tile__credentials-toggle"
+        className={`tile__credentials-toggle${
+          required && !summary ? " tile__credentials-toggle--required" : ""
+        }`}
         onClick={(event) => {
           event.preventDefault();
           if (open) setOpen(false);
@@ -125,62 +154,96 @@ export function ProviderCredentialsForm({
       >
         {summary
           ? `Using your own app · ${summary.clientIdPreview ?? "saved"}`
-          : "Advanced: use your own developer app"}
+          : required
+            ? `Set up ${displayName} with your own app`
+            : "Advanced: use your own developer app"}
       </summary>
 
       {open && (
         <form className="credentials__form" onSubmit={submit}>
+          {!required && (
+            <p className="transfer-form__hint">
+              Most people should use <strong>Connect {displayName}</strong> above instead — it takes
+              you to {displayName}&apos;s own sign-in page and needs nothing technical from you.
+            </p>
+          )}
+
           <p className="transfer-form__hint">
-            Most people should use <strong>Connect {displayName}</strong> above instead — it takes
-            you to {displayName}&apos;s own sign-in page and needs nothing technical from you.
-          </p>
-          <p className="transfer-form__hint">
-            Only if you are running your own copy of Ekusupo, or want transfers to use your own API
-            quota: create an app in{" "}
+            {required
+              ? `Nobody has set ${displayName} up on this server, so it needs an app of your own.`
+              : "Only if you are running your own copy of Ekusupo, or want transfers to use your own API quota."}{" "}
+            Create one in{" "}
             <a href={CONSOLE_URLS[providerId]} target="_blank" rel="noreferrer noopener">
               {displayName}&apos;s developer console
             </a>
-            , add the redirect URI below to it exactly as shown, then paste its ID and secret here.
-            The secret is encrypted before it is stored and never sent back to this page.
+            {usesToken
+              ? ", then paste the developer token it issues."
+              : ", add the redirect URI below to it exactly as shown, then paste its ID and secret here."}{" "}
+            Whatever you paste is encrypted before it is stored and never sent back to this page.
           </p>
 
-          <label className="field__label" htmlFor={clientIdField}>
-            Client ID
-          </label>
-          <input
-            id={clientIdField}
-            className="field__input"
-            autoComplete="off"
-            value={clientId}
-            onChange={(event) => setClientId(event.target.value)}
-          />
+          {usesToken ? (
+            <>
+              <label className="field__label" htmlFor={tokenField}>
+                Developer token
+              </label>
+              <input
+                id={tokenField}
+                className="field__input"
+                type="password"
+                autoComplete="off"
+                value={developerToken}
+                onChange={(event) => setDeveloperToken(event.target.value)}
+              />
+              <p className="transfer-form__hint">
+                A JWT you sign with a MusicKit key from a paid Apple Developer account. It grants
+                catalogue access only — reading your own Apple library needs a Music-User-Token that
+                this server cannot obtain.
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="field__label" htmlFor={clientIdField}>
+                Client ID
+              </label>
+              <input
+                id={clientIdField}
+                className="field__input"
+                autoComplete="off"
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+              />
 
-          <label className="field__label" htmlFor={secretField}>
-            Client secret
-          </label>
-          <input
-            id={secretField}
-            className="field__input"
-            type="password"
-            autoComplete="off"
-            value={clientSecret}
-            onChange={(event) => setClientSecret(event.target.value)}
-          />
+              <label className="field__label" htmlFor={secretField}>
+                Client secret
+              </label>
+              <input
+                id={secretField}
+                className="field__input"
+                type="password"
+                autoComplete="off"
+                value={clientSecret}
+                onChange={(event) => setClientSecret(event.target.value)}
+              />
 
-          <label className="field__label" htmlFor={redirectField}>
-            Redirect URI
-          </label>
-          <input
-            id={redirectField}
-            className="field__input"
-            value={redirectUri}
-            onChange={(event) => setRedirectUri(event.target.value)}
-          />
+              <label className="field__label" htmlFor={redirectField}>
+                Redirect URI
+              </label>
+              <input
+                id={redirectField}
+                className="field__input"
+                value={redirectUri}
+                onChange={(event) => setRedirectUri(event.target.value)}
+              />
+            </>
+          )}
 
           <button
             type="submit"
             className="btn btn--connect"
-            disabled={status.kind === "saving" || !clientId || !clientSecret}
+            disabled={
+              status.kind === "saving" || (usesToken ? !developerToken : !clientId || !clientSecret)
+            }
           >
             {status.kind === "saving" ? "Saving…" : "Save and enable"}
           </button>

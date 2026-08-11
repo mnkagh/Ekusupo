@@ -90,10 +90,10 @@ function ProviderTile({
           ? `Connected on ${formatConnectedAt(connection.connectedAt)}`
           : connectable
             ? descriptor.capability
-            : // Says who can fix it and how. Naming server environment
-              // variables, as this once did, is useless to someone who
-              // is not the operator.
-              `Not set up on this server yet — ask whoever runs it to add ${descriptor.name}.`}
+            : // Says what the reader can actually do about it. Naming
+              // server environment variables, as this once did, is
+              // useless to someone who is not the operator.
+              `Not set up on this server — add your own ${descriptor.name} app below to enable it.`}
       </p>
 
       <div className="tile__action">
@@ -120,14 +120,17 @@ function ProviderTile({
         )}
       </div>
 
-      {/* Only for providers that authorize a user account. Apple Music
-          connects with a server-signed developer token, which is not
-          something an end user can supply. */}
-      {catalogEntry?.authKind === "oauth2" && (
+      {/* Every provider in the registry, including Apple Music — it
+          takes a signed developer token rather than a client id and
+          secret, but that is still something a user can paste, and
+          leaving it out meant a tile with no way to enable it at all. */}
+      {catalogEntry && (
         <ProviderCredentialsForm
           providerId={descriptor.id}
           displayName={descriptor.name}
           summary={credentialSummary}
+          authKind={catalogEntry.authKind}
+          required={!connectable}
           onChanged={onCredentialsChanged}
         />
       )}

@@ -1437,8 +1437,12 @@ input[type="file"].field__input::file-selector-button:hover {
    * stops the spill from extending the scrollable area, and it does that
    * regardless of how wide the margin is. The margin only decides how
    * much of the glow is allowed to be seen.
+   *
+   * Sized for the *outer* halo, which is the widest thing here:
+   * `blur(110px)` on a copy scaled to 2.6, over type reaching 9rem,
+   * spills roughly fourteen rem past the text.
    */
-  overflow-clip-margin: 16rem;
+  overflow-clip-margin: 26rem;
 }
 
 /* Holds the word and the colour orbiting it in one stacking context, so
@@ -1519,28 +1523,6 @@ input[type="file"].field__input::file-selector-button:hover {
  * The gradient sweeps and each letter is offset from the last, so the
  * colour travels around the outside of the word.
  */
-.immersive__word span::before {
-  content: attr(data-char);
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-
-  color: transparent;
-  background: var(--spectrum);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-
-  /* Saturated well past the UI palette — at this blur radius an
-     unboosted gradient averages into grey. */
-  filter: blur(26px) saturate(1.9) brightness(1.4);
-  transform: scale(1.22);
-
-  animation: sweep-spectrum 6s linear infinite;
-  animation-delay: calc(var(--i) * -0.8s);
-}
-
 /*
  * The halo: a second copy of each letter, spectrum-filled and blurred,
  * behind the solid one. Because it is the same glyph rather than a
@@ -1563,12 +1545,45 @@ input[type="file"].field__input::file-selector-button:hover {
   -webkit-background-clip: text;
   background-clip: text;
 
-  filter: blur(30px) saturate(1.8) brightness(1.35);
-  transform: scale(1.3);
+  /*
+   * Blur and scale together, not blur alone. Blur spreads the light but
+   * keeps it centred on the glyph, so raising it by itself just softens
+   * the same footprint; scaling the copy up is what actually pushes the
+   * colour outward into a wider halo. Raised well past the earlier
+   * 30px/1.3 so the glow reads as a field of light around the word
+   * rather than an outline hugging it.
+   */
+  filter: blur(56px) saturate(2) brightness(1.45);
+  transform: scale(1.85);
   opacity: 1;
   pointer-events: none;
 
   animation: sweep-spectrum 7s linear infinite;
+  animation-delay: calc(var(--i) * -0.8s);
+}
+
+/* A second, wider and fainter copy — the outer falloff. One layer at
+   this radius would either be too weak near the letters or too heavy at
+   the edge; two lets the halo stay bright at its core and still reach
+   a long way out. */
+.immersive__word span::after {
+  content: attr(data-char);
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+
+  color: transparent;
+  background: var(--spectrum);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  filter: blur(110px) saturate(2.2) brightness(1.5);
+  transform: scale(2.6);
+  opacity: 0.75;
+
+  animation: sweep-spectrum 11s linear infinite;
   animation-delay: calc(var(--i) * -0.8s);
 }
 
@@ -2159,6 +2174,15 @@ input[type="file"].field__input::file-selector-button:hover {
 .tile__credentials-toggle:hover,
 .tile__credentials-toggle:focus-visible {
   color: var(--text-secondary);
+}
+
+/* When there is no server app to fall back on, this is the only control
+   that does anything — so it stops whispering and looks like the action
+   it is. */
+.tile__credentials-toggle--required {
+  font-size: var(--text-sm);
+  color: var(--spectrum-1);
+  font-weight: 600;
 }
 
 .credentials__state {
@@ -3019,6 +3043,7 @@ input[type="file"].field__input::file-selector-button:hover {
   }
 
   .immersive__word span::before,
+  .immersive__word span::after,
   .backdrop {
     display: none;
   }

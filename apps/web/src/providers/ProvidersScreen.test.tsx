@@ -84,26 +84,37 @@ describe("ProvidersScreen", () => {
     expect(screen.getAllByText("Needs an app").length).toBeGreaterThan(0);
   });
 
-  it("says who can fix an unconfigured provider, not which env vars are missing", async () => {
+  it("tells the reader what they can do about an unconfigured provider", async () => {
     // Naming server environment variables is useless to someone who is
-    // not the operator.
+    // not the operator; supplying their own app is something they can
+    // actually act on.
     vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
-    expect(await screen.findByText(/ask whoever runs it to add YouTube Music/)).toBeDefined();
+    expect(await screen.findByText(/add your own YouTube Music app below/)).toBeDefined();
   });
 
-  it("keeps bringing your own app as an advanced option, not a primary one", async () => {
-    // Connecting through the provider's own sign-in page is what almost
-    // everyone should do; pasting a client id is the self-hosting
-    // escape hatch and must not compete with it for attention.
+  it("makes bringing your own app prominent when nothing else can enable the provider", async () => {
+    // With no server credentials this is the only control on the tile
+    // that does anything — hiding it behind an "advanced" aside left a
+    // provider that simply could not be enabled.
+    vi.stubGlobal("fetch", stubApi([]));
+    render(<ProvidersScreen />);
+
+    expect(await screen.findByText("Set up YouTube Music with your own app")).toBeDefined();
+    // Including Apple Music, which takes a developer token rather than a
+    // client id — still something a user can paste.
+    expect(screen.getByText("Set up Apple Music with your own app")).toBeDefined();
+  });
+
+  it("keeps it as a quiet advanced option where the server can already connect", async () => {
+    // Spotify is configured here, so the ordinary path — Connect, and
+    // sign in on Spotify's own page — must not have to compete with it.
     vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
     await screen.findByRole("link", { name: "Connect Spotify" });
-    // Spotify and YouTube are oauth2; Apple Music uses a server-signed
-    // developer token, so there is nothing a user could paste.
-    expect(screen.getAllByText(/Advanced: use your own developer app/)).toHaveLength(2);
+    expect(screen.getAllByText("Advanced: use your own developer app")).toHaveLength(1);
   });
 
   it("shows which of your own apps is in use, without ever showing the secret", async () => {

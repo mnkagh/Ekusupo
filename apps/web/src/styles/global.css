@@ -74,12 +74,21 @@ input {
    * looked like a circle cut in half. Concentric stops on the same
    * centre are what make it a halo.
    */
+  /*
+   * `closest-side` is doing the important work. A radial gradient sizes
+   * itself to the farthest *corner* by default, so on a 16:9 screen its
+   * radius is about twice the half-height — the coloured part ran off
+   * the top and bottom of the viewport and only the middle band was ever
+   * visible, which is exactly why it read as half a circle. Sizing to
+   * the nearest edge puts the whole circle on screen.
+   */
   background:
     radial-gradient(
-      circle at 50% 50%,
+      circle closest-side at 50% 50%,
       var(--glow-violet) 0%,
-      var(--glow-teal) 28%,
-      transparent 62%
+      var(--glow-teal) 38%,
+      var(--glow-amber) 62%,
+      transparent 100%
     ),
     var(--surface-void);
 
@@ -148,16 +157,6 @@ input {
    * around it still clips at the viewport.
    */
   overflow: visible;
-
-  /*
-   * The pointer parallax lands here rather than on `.backdrop__mark`,
-   * which owns `translate` for the drawer shift — and that shift is
-   * transitioned over 0.7s. Sharing the property would run every pointer
-   * frame through that transition, turning a responsive drift into a
-   * laggy smear. The custom properties are written on the parent and
-   * inherit down; both default to zero, so this is also the rest state.
-   */
-  translate: var(--parallax-x, 0%) var(--parallax-y, 0%);
 
   /* The glow. `drop-shadow` follows the alpha of the shape, so the light
      takes the form of the strokes — a `box-shadow` would halo the square
@@ -310,9 +309,12 @@ input {
 .backdrop__scrim {
   position: absolute;
   inset: 0;
+  /* `farthest-side` here, deliberately the opposite of the halo: this
+     one has to reach the corners to darken them, and it must not start
+     shading until well past where the halo ends. */
   background: radial-gradient(
-    circle at 50% 50%,
-    transparent 42%,
+    circle farthest-side at 50% 50%,
+    transparent 55%,
     color-mix(in srgb, var(--surface-void) 55%, transparent) 100%
   );
 }
@@ -326,8 +328,8 @@ input {
  * over a 26-second loop meant it was almost never actually centred, and
  * on a narrow window the offset was the difference between fitting and
  * being clipped. Breathing in place keeps it alive without ever leaving
- * the middle of the screen; the pointer parallax on the landing is the
- * one thing that moves it, and only while the cursor is moving.
+ * the middle of the screen. Nothing else moves it now except a drawer
+ * opening — a click is answered with light, not with motion.
  */
 @keyframes backdrop-drift {
   0%,
@@ -347,8 +349,10 @@ input {
  * rather than stacking with it — two animations on `filter` would mean
  * one silently overriding the other for as long as both ran.
  */
+/* `linear`, so the keyframe timings above *are* the shape of the strike
+   — an easing curve would smooth the flicker straight back out. */
 .backdrop__mark--flash svg {
-  animation: backdrop-flash 1100ms var(--ease-out);
+  animation: backdrop-flash 1600ms linear;
 }
 
 /*
@@ -360,27 +364,42 @@ input {
  * behind it.
  */
 /*
- * The strike is carried by the *radius* of the glow, not by
- * `brightness`. The strokes are already near-white at rest, and
- * brightening white produces nothing — an earlier version leaned on it
- * and barely registered. Throwing the bloom out to three times its
- * resting radius is what reads as a flash.
+ * Lightning, not a fade-up.
+ *
+ * The shape of a real strike is what sells it: no ramp at all on the way
+ * in, a stutter as it re-strikes, then a long decay. Hence the repeated
+ * keyframes a couple of percent apart — those are the flicker, and
+ * spacing them evenly would turn the whole thing back into a throb.
+ *
+ * Carried by the *radius* of the glow rather than `brightness`, because
+ * the strokes are already near-white at rest and brightening white
+ * produces nothing.
  */
 @keyframes backdrop-flash {
   0% {
     filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
       drop-shadow(0 0 70px var(--spectrum-3));
   }
-  10% {
-    filter: drop-shadow(0 0 22px var(--spectrum-1)) drop-shadow(0 0 90px var(--spectrum-2))
-      drop-shadow(0 0 220px var(--spectrum-3));
+  /* The strike — instant, no approach. */
+  2% {
+    filter: drop-shadow(0 0 30px #fff) drop-shadow(0 0 120px var(--spectrum-1))
+      drop-shadow(0 0 260px var(--spectrum-2));
   }
-  /* Most of the fall happens fast, then it eases the rest of the way
-     back — a hard cut to the resting state reads as a flicker. */
-  35% {
-    filter: drop-shadow(0 0 13px var(--spectrum-1)) drop-shadow(0 0 55px var(--spectrum-2))
-      drop-shadow(0 0 140px var(--spectrum-3));
+  /* Falls away... */
+  9% {
+    filter: drop-shadow(0 0 8px var(--spectrum-1)) drop-shadow(0 0 30px var(--spectrum-2))
+      drop-shadow(0 0 80px var(--spectrum-3));
   }
+  /* ...and re-strikes, the way lightning does. */
+  13% {
+    filter: drop-shadow(0 0 26px #fff) drop-shadow(0 0 100px var(--spectrum-1))
+      drop-shadow(0 0 220px var(--spectrum-2));
+  }
+  22% {
+    filter: drop-shadow(0 0 14px var(--spectrum-1)) drop-shadow(0 0 60px var(--spectrum-2))
+      drop-shadow(0 0 150px var(--spectrum-3));
+  }
+  /* The long tail back to rest. */
   100% {
     filter: drop-shadow(0 0 6px var(--spectrum-1)) drop-shadow(0 0 26px var(--spectrum-2))
       drop-shadow(0 0 70px var(--spectrum-3));

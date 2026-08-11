@@ -91,48 +91,111 @@ function spectrum(t) {
   return t < 0.5 ? mix(TEAL, VIOLET, t * 2) : mix(VIOLET, AMBER, (t - 0.5) * 2);
 }
 
+/** Distance from a point to a line segment — round caps come for free. */
+function distanceToSegment(px, py, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const wx = px - ax;
+  const wy = py - ay;
+  const lengthSquared = vx * vx + vy * vy;
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, (wx * vx + wy * vy) / lengthSquared));
+  return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
+}
+
+/** Approximates a quarter-turn corner as a short run of segments. */
+function arc(cx, cy, radius, fromDegrees, toDegrees, steps = 5) {
+  const segments = [];
+  for (let i = 0; i < steps; i++) {
+    const a1 = ((fromDegrees + ((toDegrees - fromDegrees) * i) / steps) * Math.PI) / 180;
+    const a2 = ((fromDegrees + ((toDegrees - fromDegrees) * (i + 1)) / steps) * Math.PI) / 180;
+    segments.push([
+      cx + radius * Math.cos(a1),
+      cy + radius * Math.sin(a1),
+      cx + radius * Math.cos(a2),
+      cy + radius * Math.sin(a2),
+    ]);
+  }
+  return segments;
+}
+
 /**
- * Two interlocking rings on an ink field — the same mark the backdrop
- * renders in 3D, flattened. `safeArea` insets the artwork so a maskable
- * icon survives Android cropping it to a circle.
+ * The Ekusupo mark, on the same 64×64 grid as `apps/web/src/brand/Logo.tsx`
+ * — a library holding three equaliser bars, with an arrow leaving through
+ * its open top-right corner.
+ *
+ * Every stroke is a line segment, and a pixel belongs to the mark when it
+ * is within half a stroke width of the nearest one. That is the whole
+ * rasteriser: there is no SVG engine here, and this repository ships no
+ * image toolchain, so the mark is expressed as geometry the loop below
+ * can measure against directly.
+ *
+ * Kept deliberately in step with the SVG. If the logo changes shape, these
+ * coordinates change with it — a favicon quietly showing a previous
+ * version of the brand is exactly what this replaced.
  */
+const MARK_SEGMENTS = [
+  // The library: top edge, then anticlockwise, open at the top right.
+  [40, 14, 20, 14],
+  ...arc(20, 20, 6, -90, -180),
+  [14, 20, 14, 44],
+  ...arc(20, 44, 6, 180, 90),
+  [20, 50, 44, 50],
+  ...arc(44, 44, 6, 90, 0),
+  [50, 44, 50, 28],
+
+  // What is inside it: three bars on a common baseline, uneven so they
+  // read as sound rather than as a barcode.
+  [23, 41, 23, 32],
+  [32, 41, 32, 25],
+  [41, 41, 41, 35],
+
+  // Out through the corner: shaft, then the arrowhead's two edges.
+  [43, 21, 57, 7],
+  [46, 7, 57, 7],
+  [57, 7, 57, 18],
+];
+
 function drawIcon(size, safeArea) {
   const rgba = Buffer.alloc(size * size * 4);
-  const centre = size / 2;
-  const usable = (size / 2) * safeArea;
-  const ringRadius = usable * 0.62;
-  const ringWidth = Math.max(2, usable * 0.13);
+
+  // Maps the 64-unit grid onto the canvas, inset by the safe area so a
+  // maskable icon survives the launcher cropping it to a circle.
+  const scale = (size * safeArea) / 64;
+  const offsetX = (size - 64 * scale) / 2;
+  const offsetY = (size - 64 * scale) / 2;
+  const halfStroke = (5 / 2) * scale;
+
+  // Pre-scale once rather than per pixel.
+  const segments = MARK_SEGMENTS.map(([ax, ay, bx, by]) => [
+    offsetX + ax * scale,
+    offsetY + ay * scale,
+    offsetX + bx * scale,
+    offsetY + by * scale,
+  ]);
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const dx = x - centre;
-      const dy = y - centre;
+      const px = x + 0.5;
+      const py = y + 0.5;
 
-      let r = INK[0];
-      let g = INK[1];
-      let b = INK[2];
-
-      // Horizontal ring, then a vertical ellipse crossing it — the same
-      // silhouette as the 3D core seen face-on.
-      const distanceOuter = Math.hypot(dx, dy);
-      const distanceInner = Math.hypot(dx / 0.45, dy);
-
-      const onOuter = Math.abs(distanceOuter - ringRadius) < ringWidth / 2;
-      const onInner = Math.abs(distanceInner - ringRadius) < ringWidth / 2;
-
-      if (onOuter || onInner) {
-        // Hue follows the angle, so the ring runs through the palette.
-        const angle = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-        const [sr, sg, sb] = spectrum(angle);
-        r = sr;
-        g = sg;
-        b = sb;
+      let nearest = Infinity;
+      for (const [ax, ay, bx, by] of segments) {
+        const distance = distanceToSegment(px, py, ax, ay, bx, by);
+        if (distance < nearest) nearest = distance;
       }
 
+      // One pixel of feathering at the edge. Without it every curve and
+      // diagonal in the mark is visibly stair-stepped at 192px.
+      const coverage = Math.max(0, Math.min(1, halfStroke + 0.5 - nearest));
+
+      // The ramp runs left to right across the mark, matching the SVG's
+      // gradient rather than being re-invented here.
+      const [sr, sg, sb] = spectrum(Math.max(0, Math.min(1, (px - offsetX) / (64 * scale))));
+
       const offset = (y * size + x) * 4;
-      rgba[offset] = r;
-      rgba[offset + 1] = g;
-      rgba[offset + 2] = b;
+      rgba[offset] = Math.round(INK[0] + (sr - INK[0]) * coverage);
+      rgba[offset + 1] = Math.round(INK[1] + (sg - INK[1]) * coverage);
+      rgba[offset + 2] = Math.round(INK[2] + (sb - INK[2]) * coverage);
       rgba[offset + 3] = 255;
     }
   }

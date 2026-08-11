@@ -45,23 +45,36 @@ export function ProviderGlyph({ glyph }: { glyph: ProviderDescriptor["glyph"] })
       </defs>
 
       <g stroke={stroke} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {/* Spotify — the disc as an outline, with three signal arcs. */}
+        {/*
+          Every mark carries the same three bars the logo does — uneven
+          heights on a common baseline. That motif is what makes the set
+          read as one family; the shape around it is what tells them
+          apart. Before this each glyph was a different idea entirely
+          (arcs, a triangle, ruled lines) and they only had a stroke
+          weight in common.
+        */}
+
+        {/* Spotify — the disc, as an outline. */}
         {glyph === "wave" && (
           <g>
             <circle cx="24" cy="24" r="19" className="provider-glyph__disc" />
-            <g className="provider-glyph__arcs">
-              <path d="M15 19c6-2 12-1.6 17 1" />
-              <path d="M16.5 25c5-1.6 10-1.3 14 1" />
-              <path d="M18 31c3.6-1.2 7.4-0.9 10.6 1" />
+            <g className="provider-glyph__bars">
+              <path d="M17 29v-6" />
+              <path d="M24 29v-11" />
+              <path d="M31 29v-8" />
             </g>
           </g>
         )}
 
-        {/* YouTube Music — outlined disc, ring and beating triangle. */}
+        {/* YouTube Music — the video frame. */}
         {glyph === "play" && (
           <g>
-            <circle cx="24" cy="24" r="19" className="provider-glyph__ring" />
-            <path className="provider-glyph__play" d="M20.5 17.5 31 24l-10.5 6.5z" />
+            <rect x="5" y="10" width="38" height="28" rx="8" className="provider-glyph__ring" />
+            <g className="provider-glyph__bars">
+              <path d="M17 29v-6" />
+              <path d="M24 29v-11" />
+              <path d="M31 29v-8" />
+            </g>
           </g>
         )}
 
@@ -70,8 +83,11 @@ export function ProviderGlyph({ glyph }: { glyph: ProviderDescriptor["glyph"] })
           <g>
             <path d="M28 5H14a5 5 0 0 0-5 5v28a5 5 0 0 0 5 5h20a5 5 0 0 0 5-5V16z" />
             <path className="provider-glyph__fold" d="M28 5v6a5 5 0 0 0 5 5h6" />
-            <path d="M17 26h14" />
-            <path d="M17 33h9" />
+            <g className="provider-glyph__bars">
+              <path d="M17 34v-5" />
+              <path d="M24 34v-10" />
+              <path d="M31 34v-7" />
+            </g>
           </g>
         )}
       </g>

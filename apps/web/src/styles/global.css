@@ -2034,33 +2034,39 @@ input[type="file"].field__input::file-selector-button:hover {
    folds. Live entries animate continuously; the rest animate on hover,
    so a connected provider is identifiable without reading a word. --- */
 
-.provider-glyph__arcs path {
-  transform-origin: 24px 34px;
-  transform-box: view-box;
+/*
+ * The bars are shared by every mark, so their motion is defined once.
+ * Scaled about their own baseline rather than their centre, which is
+ * what makes them rise and fall like a meter instead of pulsing
+ * symmetrically in place.
+ */
+.provider-glyph__bars path {
+  transform-origin: bottom;
+  transform-box: fill-box;
 }
 
-.tile--live .provider-glyph__arcs path,
-.tile:hover .provider-glyph__arcs path {
-  animation: arc-pulse 1.8s var(--ease-in-out) infinite;
+.tile--live .provider-glyph__bars path,
+.tile:hover .provider-glyph__bars path {
+  animation: bar-bounce 1.4s var(--ease-in-out) infinite;
 }
 
-.provider-glyph__arcs path:nth-child(2) {
-  animation-delay: 0.2s;
+/* Offset, and not by equal steps — three bars moving in lockstep read
+   as one object scaling, not as sound. */
+.provider-glyph__bars path:nth-child(2) {
+  animation-delay: 0.22s;
 }
 
-.provider-glyph__arcs path:nth-child(3) {
-  animation-delay: 0.4s;
+.provider-glyph__bars path:nth-child(3) {
+  animation-delay: 0.11s;
 }
 
-@keyframes arc-pulse {
+@keyframes bar-bounce {
   0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.94);
+    transform: scaleY(1);
   }
   50% {
-    opacity: 1;
-    transform: scale(1);
+    transform: scaleY(0.45);
   }
 }
 
@@ -2103,26 +2109,6 @@ input[type="file"].field__input::file-selector-button:hover {
   50% {
     transform: scale(1.03);
     opacity: 1;
-  }
-}
-
-.provider-glyph__play {
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
-.tile--live .provider-glyph__play,
-.tile:hover .provider-glyph__play {
-  animation: play-pulse 1.4s var(--ease-in-out) infinite;
-}
-
-@keyframes play-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(0.86);
   }
 }
 

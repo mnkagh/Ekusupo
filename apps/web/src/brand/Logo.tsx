@@ -75,12 +75,21 @@ export function Logo({ size = 40, title, className }: LogoProps) {
         <path d="M32 41 V25" />
         <path d="M41 41 V35" />
 
-        {/* Out through the corner. Grouped so the two strokes travel as
-            one piece when the backdrop sends it on its trip — see
-            `.logo__arrow` in global.css. */}
-        <g className="logo__arrow">
-          <path d="M43 21 L57 7" />
-          <path d="M46 7 H57 V18" />
+        {/*
+          Out through the corner.
+
+          Two nested groups, because the backdrop flies this arrow around
+          the mark and that needs two independent rotations: the outer
+          one carries it around the circle, the inner one turns it to
+          face where it is going. One group could only do both at once —
+          which keeps the nose pointing outward the whole way round, and
+          that is a clock hand, not an aircraft.
+        */}
+        <g className="logo__arrow-orbit">
+          <g className="logo__arrow">
+            <path d="M43 21 L57 7" />
+            <path d="M46 7 H57 V18" />
+          </g>
         </g>
       </g>
     </svg>

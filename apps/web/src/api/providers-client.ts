@@ -12,7 +12,28 @@ export interface CatalogProvider {
   displayName: string;
   authKind: "oauth2" | "serverToken";
   configured: boolean;
+  /** Whose app makes it usable: the caller's own, the deployment's, or nobody's. */
+  credentialSource?: "user" | "server" | "none";
   requiredEnv: string[];
+}
+
+/**
+ * What the server will say about credentials someone stored. Never the
+ * secret — there is no endpoint that gives one back.
+ */
+export interface StoredCredentialSummary {
+  provider: string;
+  clientIdPreview?: string;
+  hasSecret: boolean;
+  redirectUri?: string;
+  updatedAt: string;
+}
+
+export interface ProviderCredentialsInput {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+  developerToken?: string;
 }
 
 export interface ProvidersClientConfig {
@@ -66,6 +87,32 @@ export function createProvidersClient(config: ProvidersClientConfig = {}) {
 
     listCatalog(): Promise<{ providers: CatalogProvider[] }> {
       return request("/providers/catalog");
+    },
+
+    /** Summaries of the caller's own stored app credentials. Never secrets. */
+    listCredentials(): Promise<{ credentials: StoredCredentialSummary[] }> {
+      return request("/providers/credentials");
+    },
+
+    /**
+     * Saves the caller's own OAuth app for a provider. Any existing
+     * connection is dropped by the server, because its tokens were
+     * issued to a different app.
+     */
+    saveCredentials(
+      provider: string,
+      credentials: ProviderCredentialsInput,
+    ): Promise<{ saved: true; reconnectRequired: true }> {
+      return request(`/providers/${encodeURIComponent(provider)}/credentials`, {
+        method: "PUT",
+        body: JSON.stringify(credentials),
+      });
+    },
+
+    deleteCredentials(provider: string): Promise<{ deleted: true }> {
+      return request(`/providers/${encodeURIComponent(provider)}/credentials`, {
+        method: "DELETE",
+      });
     },
 
     /**

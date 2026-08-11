@@ -45,6 +45,40 @@ export const providerConnectionsTable = pgTable(
 );
 
 /**
+ * A user's **own** OAuth application credentials for a provider.
+ *
+ * Distinct from `provider_connections`, which holds the tokens a
+ * completed authorization produced. This holds what is needed to *start*
+ * one: the client id and secret of an app the user registered with the
+ * provider themselves.
+ *
+ * It exists because the alternative does not scale. Spotify caps an app
+ * in development mode at 25 manually-listed users, and lifting that
+ * needs a quota review of the deployment — so a single operator-owned
+ * app cannot serve an open-source tool's users. Letting each user bring
+ * their own app makes the deployment a piece of software rather than a
+ * gatekeeper.
+ *
+ * `encryptedCredentials` is a JSON blob through the same AES-256-GCM
+ * path as the tokens (ADR-0025). A client secret is exactly as sensitive
+ * as an access token and is never returned by any endpoint.
+ */
+export const providerCredentialsTable = pgTable(
+  "provider_credentials",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    encryptedCredentials: text("encrypted_credentials").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [unique().on(table.userId, table.provider)],
+);
+
+/**
  * `report` is null until the job finishes (ADR-0027) — `runDryRunTransfer`
  * (`@ekusupo/core`) only returns a `TransferReport` once it resolves, and
  * the job row is created up front so its live status is queryable while

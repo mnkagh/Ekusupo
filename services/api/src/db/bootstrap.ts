@@ -40,6 +40,19 @@ export async function ensureSchema(db: Database): Promise<void> {
     )
   `);
 
+  // The user's own OAuth app, as opposed to the tokens it produced.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS provider_credentials (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      encrypted_credentials TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      UNIQUE (user_id, provider)
+    )
+  `);
+
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS transfer_jobs (
       id TEXT PRIMARY KEY,

@@ -202,6 +202,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   // before the Spotify-specific routes so the generic
   // /providers/:provider/connect handles anything the registry knows.
   registerConnectRoutes(app, {
+    db,
     authService,
     providerConnectionStore,
     credentials: options.providerCredentials ?? {

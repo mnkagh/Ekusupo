@@ -29,8 +29,7 @@ export async function requireAuth(
   reply: FastifyReply,
   authService: AuthService,
 ): Promise<User | undefined> {
-  const sessionId = request.cookies[SESSION_COOKIE_NAME];
-  const user = sessionId ? await authService.getUserForSession(sessionId) : undefined;
+  const user = await optionalAuth(request, authService);
 
   if (!user) {
     reply.code(401);
@@ -38,4 +37,20 @@ export async function requireAuth(
     return undefined;
   }
   return user;
+}
+
+/**
+ * Who is asking, if anyone — without turning "nobody" into an error.
+ *
+ * For routes that are public but answer *better* when they know the
+ * caller. The provider catalogue is the case that needed it: it is
+ * readable signed out, but a signed-in user's own OAuth credentials
+ * change whether a provider counts as configured for them.
+ */
+export async function optionalAuth(
+  request: FastifyRequest,
+  authService: AuthService,
+): Promise<User | undefined> {
+  const sessionId = request.cookies[SESSION_COOKIE_NAME];
+  return sessionId ? await authService.getUserForSession(sessionId) : undefined;
 }

@@ -1,6 +1,7 @@
 import { AccountScreen } from "../account/AccountScreen.js";
 import type { PublicUser } from "../api/auth-client.js";
 import { ThemeToggle } from "../theme/ThemeToggle.js";
+import { ProviderCredentials } from "./ProviderCredentials.js";
 import { Drawer } from "../ui/Drawer.js";
 import { SettingsIcon } from "../ui/icons.js";
 
@@ -41,6 +42,11 @@ export function SettingsDrawer({ open, onClose, user, onDeleted }: SettingsDrawe
         <section className="settings__section">
           <h3 className="settings__title">Theme</h3>
           <ThemeToggle />
+        </section>
+
+        <section className="settings__section">
+          <h3 className="settings__title">Provider apps</h3>
+          <ProviderCredentials />
         </section>
 
         <section className="settings__section">

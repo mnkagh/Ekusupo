@@ -3,7 +3,10 @@ import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
 import type { AuthService } from "../auth/auth-service.js";
-import { requireAuth } from "../auth/session-cookie.js";
+import { optionalAuth, requireAuth } from "../auth/session-cookie.js";
+import type { Database } from "../db/client.js";
+import { resolveCredentials } from "../providers/credential-resolver.js";
+import { PostgresProviderCredentialStore } from "../providers/provider-credential-store.js";
 import { ProviderConnectionService } from "../providers/provider-connection-service.js";
 import type { ProviderConnectionStore } from "../providers/provider-connection-store.js";
 import { findProvider, PROVIDER_DEFINITIONS } from "../providers/provider-registry.js";
@@ -14,8 +17,10 @@ const OAUTH_STATE_COOKIE = "ekusupo_oauth_state";
 export interface ConnectRoutesDeps {
   authService: AuthService;
   providerConnectionStore: ProviderConnectionStore;
-  /** Credentials per provider id, from the environment. */
+  /** The deployment's own credentials per provider id, from the environment. */
   credentials: Record<string, ProviderCredentials>;
+  /** Backs each user's own stored credentials. */
+  db: Database;
   webAppUrl: string;
   /** Injectable so tests can exercise the full flow without a live network call. */
   overrides?: Record<string, Partial<ProviderDefinition>>;
@@ -42,16 +47,138 @@ export function registerConnectRoutes(app: FastifyInstance, deps: ConnectRoutesD
     return override ? { ...base, ...override } : base;
   }
 
-  /** What the dashboard needs to render the provider list without hardcoding it. */
-  app.get("/providers/catalog", async () => ({
-    providers: PROVIDER_DEFINITIONS.map((definition) => ({
-      id: definition.id,
-      displayName: definition.displayName,
-      authKind: definition.authKind,
-      configured: definition.isConfigured(credentials[definition.id] ?? {}),
-      requiredEnv: definition.requiredEnv,
-    })),
-  }));
+  /** The user's own app if they registered one, else the deployment's. */
+  async function credentialsFor(userId: string, providerId: string) {
+    return resolveCredentials(userId, providerId, {
+      db: deps.db,
+      serverCredentials: credentials,
+    });
+  }
+
+  /**
+   * What the dashboard needs to render the provider list.
+   *
+   * `configured` is answered for *this user*, not for the deployment: a
+   * provider the server has no credentials for is still usable by
+   * someone who brought their own, and showing it as unavailable to them
+   * would be a lie about their own account.
+   */
+  app.get("/providers/catalog", async (request) => {
+    const user = await optionalAuth(request, authService);
+    const entries = await Promise.all(
+      PROVIDER_DEFINITIONS.map(async (definition) => {
+        const resolved = user
+          ? await credentialsFor(user.id, definition.id)
+          : { credentials: credentials[definition.id] ?? {}, source: "server" as const };
+        return {
+          id: definition.id,
+          displayName: definition.displayName,
+          authKind: definition.authKind,
+          configured: definition.isConfigured(resolved.credentials),
+          /** Lets the UI say "using your own app" rather than only "connected". */
+          credentialSource: definition.isConfigured(resolved.credentials)
+            ? resolved.source
+            : "none",
+          requiredEnv: definition.requiredEnv,
+        };
+      }),
+    );
+    return { providers: entries };
+  });
+
+  /**
+   * The caller's own stored app credentials — summaries only. There is
+   * no endpoint that returns a client secret back out, deliberately: it
+   * goes in and is used, and the only way to change it is to replace it.
+   */
+  app.get("/providers/credentials", async (request, reply) => {
+    const user = await requireAuth(request, reply, authService);
+    if (!user) return;
+
+    const store = new PostgresProviderCredentialStore(deps.db, user.id);
+    return { credentials: await store.list() };
+  });
+
+  const credentialsBodySchema = {
+    body: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        clientId: { type: "string", minLength: 1, maxLength: 512 },
+        clientSecret: { type: "string", minLength: 1, maxLength: 512 },
+        redirectUri: { type: "string", minLength: 1, maxLength: 2048 },
+        developerToken: { type: "string", minLength: 1, maxLength: 4096 },
+      },
+    },
+  } as const;
+
+  interface CredentialsBody {
+    clientId?: string;
+    clientSecret?: string;
+    redirectUri?: string;
+    developerToken?: string;
+  }
+
+  app.put<{ Params: { provider: string }; Body: CredentialsBody }>(
+    "/providers/:provider/credentials",
+    { schema: credentialsBodySchema },
+    async (request, reply) => {
+      const user = await requireAuth(request, reply, authService);
+      if (!user) return;
+
+      const definition = definitionFor(request.params.provider);
+      if (!definition) {
+        reply.code(404);
+        return { error: `Unknown provider "${request.params.provider}".` };
+      }
+
+      const submitted: ProviderCredentials = {
+        ...(request.body.clientId ? { clientId: request.body.clientId } : {}),
+        ...(request.body.clientSecret ? { clientSecret: request.body.clientSecret } : {}),
+        ...(request.body.redirectUri ? { redirectUri: request.body.redirectUri } : {}),
+        ...(request.body.developerToken ? { developerToken: request.body.developerToken } : {}),
+      };
+
+      // Checked against the provider's own rule rather than a generic
+      // "not empty": saving a half-filled set would fail later, at the
+      // redirect, with an error from the provider instead of from here.
+      if (!definition.isConfigured(submitted)) {
+        reply.code(400);
+        return {
+          error: `Not enough to use ${definition.displayName}. It needs ${definition.requiredEnv.join(", ")}.`,
+        };
+      }
+
+      await new PostgresProviderCredentialStore(deps.db, user.id).save(definition.id, submitted);
+
+      // Any existing connection was authorized by a different app, so its
+      // tokens are no longer valid for these credentials.
+      await connectionService.disconnect(user.id, definition.id);
+
+      return { saved: true, reconnectRequired: true };
+    },
+  );
+
+  app.delete<{ Params: { provider: string } }>(
+    "/providers/:provider/credentials",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply, authService);
+      if (!user) return;
+
+      const removed = await new PostgresProviderCredentialStore(deps.db, user.id).delete(
+        request.params.provider,
+      );
+      if (!removed) {
+        reply.code(404);
+        return { error: "No stored credentials for that provider." };
+      }
+
+      // Same reasoning as saving: the tokens belonged to the app that is
+      // being removed.
+      await connectionService.disconnect(user.id, request.params.provider);
+      return { deleted: true };
+    },
+  );
 
   app.get<{ Params: { provider: string } }>(
     "/providers/:provider/connect",
@@ -65,11 +192,11 @@ export function registerConnectRoutes(app: FastifyInstance, deps: ConnectRoutesD
         return { error: `Unknown provider "${request.params.provider}".` };
       }
 
-      const creds = credentials[definition.id] ?? {};
+      const { credentials: creds } = await credentialsFor(user.id, definition.id);
       if (!definition.isConfigured(creds)) {
         reply.code(400);
         return {
-          error: `${definition.displayName} isn't configured on this server (${definition.requiredEnv.join(", ")} missing).`,
+          error: `${definition.displayName} isn't set up yet. Add your own ${definition.displayName} app credentials in Settings, or ask the operator to configure ${definition.requiredEnv.join(", ")}.`,
         };
       }
 

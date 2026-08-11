@@ -96,12 +96,14 @@ input {
  * `transform`, and setting both here would mean one silently winning.
  * These are separate properties, so they compose instead of fighting.
  */
+/* Enough to clear a drawer, not so much that the mark walks off the
+   side of a narrow window. */
 .backdrop--shift-left .backdrop__mark {
-  translate: -22% 0;
+  translate: -14% 0;
 }
 
 .backdrop--shift-right .backdrop__mark {
-  translate: 22% 0;
+  translate: 14% 0;
 }
 
 /* On a phone the drawer becomes a bottom sheet covering most of the
@@ -114,8 +116,27 @@ input {
 }
 
 .backdrop__mark svg {
-  width: clamp(18rem, 62vmin, 46rem);
+  /*
+   * Sized off the *shorter* viewport axis and capped well inside it.
+   * At 62vmin the mark was wider than a narrow window, so the container
+   * clipped it left and right — and once it drifted or slid out from
+   * under a drawer, the cut on one side became obvious. Everything that
+   * moves it is a percentage of this width, so keeping it comfortably
+   * smaller than the viewport is what keeps the whole mark on screen
+   * through the full range of motion.
+   */
+  width: clamp(13rem, 44vmin, 32rem);
   height: auto;
+
+  /*
+   * The pointer parallax lands here rather than on `.backdrop__mark`,
+   * which owns `translate` for the drawer shift — and that shift is
+   * transitioned over 0.7s. Sharing the property would run every pointer
+   * frame through that transition, turning a responsive drift into a
+   * laggy smear. The custom properties are written on the parent and
+   * inherit down; both default to zero, so this is also the rest state.
+   */
+  translate: var(--parallax-x, 0%) var(--parallax-y, 0%);
 
   /* The glow. `drop-shadow` follows the alpha of the shape, so the light
      takes the form of the strokes — a `box-shadow` would halo the square
@@ -139,69 +160,91 @@ input {
  * and the loop has no seam. The pauses at either end are what make it
  * read as a departure and an arrival rather than as constant spinning.
  */
-.backdrop__mark .logo__arrow {
+/* The flight path: around the mark's centre, once, then a rest. */
+.backdrop__mark .logo__arrow-orbit {
   transform-box: view-box;
   transform-origin: 32px 32px;
-  /*
-   * Two animations on one element, deliberately: the trip owns
-   * `transform`, the flash owns `filter`. Trying to put both in one
-   * keyframe set would mean every frame restating both properties, and
-   * the two have completely different rhythms — the arrow travels
-   * smoothly and flares in bursts.
-   */
-  animation:
-    arrow-trip 7s cubic-bezier(0.62, -0.35, 0.32, 1.32) infinite,
-    arrow-flash 7s var(--ease-in-out) infinite;
+  animation: arrow-orbit 7s cubic-bezier(0.55, -0.28, 0.35, 1.28) infinite;
 }
 
 /*
- * The cartoon timing lives in the easing rather than the keyframes: the
- * curve above overshoots at both ends, so the arrow winds up slightly
- * before it launches and overshoots its slot before settling back into
- * it. That anticipate-and-settle is what separates a drawn animation
- * from a linear tween.
+ * The attitude, about the arrow's own centre rather than the mark's.
+ *
+ * At rest it sits where the logo draws it, nose pointing out of the
+ * corner. As it launches it banks a quarter turn so the nose leads along
+ * the circle — an aircraft turning into its heading — holds that the
+ * whole way round, and rolls back out as it settles into its slot.
+ *
+ * The flash rides here too, so the light is on the aircraft rather than
+ * on the orbit it happens to be travelling.
  */
-@keyframes arrow-trip {
+.backdrop__mark .logo__arrow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    arrow-bank 7s var(--ease-in-out) infinite,
+    arrow-flash 7s var(--ease-in-out) infinite;
+}
+
+@keyframes arrow-orbit {
   0%,
   14% {
-    transform: rotate(0deg) translateX(0) scale(1);
+    transform: rotate(0deg) translateX(0);
   }
-  /* Squashes as it accelerates away... */
-  28% {
-    transform: rotate(70deg) translateX(7px) scale(0.88);
-  }
-  /* ...stretches at full speed on the far side... */
-  55% {
-    transform: rotate(210deg) translateX(9px) scale(1.14);
-  }
-  /* ...and comes back in on the brakes. */
-  78% {
-    transform: rotate(330deg) translateX(3px) scale(0.95);
+  /* Pushed wide at speed, the way anything banking hard drifts out. */
+  50% {
+    transform: rotate(184deg) translateX(9px);
   }
   88%,
   100% {
-    transform: rotate(360deg) translateX(0) scale(1);
+    transform: rotate(360deg) translateX(0);
   }
 }
 
-/* A charge before it goes and a burst as it lands, rather than an even
-   glow the whole way round. */
-@keyframes arrow-flash {
+@keyframes arrow-bank {
   0%,
   10% {
-    filter: drop-shadow(0 0 3px var(--spectrum-1));
+    transform: rotate(0deg) scale(1);
   }
-  14% {
-    filter: drop-shadow(0 0 22px var(--spectrum-1)) drop-shadow(0 0 44px var(--spectrum-2));
+  /* Squashes into the turn as it commits to the heading. */
+  22% {
+    transform: rotate(-90deg) scale(0.9);
+  }
+  /* Stretched out along the cruise. */
+  55% {
+    transform: rotate(-90deg) scale(1.12);
+  }
+  /* Rolls back out and drops into the slot. */
+  86%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+/*
+ * Solid spectrum stops rather than the `--glow-*` tokens: those are
+ * low-alpha by design and simply vanished underneath the whole mark's
+ * own bloom. A flash has to out-shine what is already lit or it is not a
+ * flash.
+ */
+@keyframes arrow-flash {
+  0%,
+  8% {
+    filter: drop-shadow(0 0 4px var(--spectrum-1));
+  }
+  /* Charges, then goes. */
+  16% {
+    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 54px var(--spectrum-2));
   }
   50% {
-    filter: drop-shadow(0 0 10px var(--spectrum-3));
+    filter: drop-shadow(0 0 16px var(--spectrum-3)) drop-shadow(0 0 40px var(--spectrum-2));
   }
+  /* Lands. */
   88% {
-    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 52px var(--spectrum-2));
+    filter: drop-shadow(0 0 30px var(--spectrum-1)) drop-shadow(0 0 62px var(--spectrum-2));
   }
   100% {
-    filter: drop-shadow(0 0 3px var(--spectrum-1));
+    filter: drop-shadow(0 0 4px var(--spectrum-1));
   }
 }
 
@@ -239,18 +282,45 @@ input {
 @keyframes backdrop-drift {
   0%,
   100% {
-    transform: translate3d(-1.2%, -1.5%, 0) scale(1);
+    transform: translate3d(-0.8%, -1%, 0) scale(1);
   }
   33% {
-    transform: translate3d(1.5%, 1.2%, 0) scale(1.03);
+    transform: translate3d(1%, 0.8%, 0) scale(1.02);
   }
   66% {
-    transform: translate3d(1%, -1.8%, 0) scale(0.985);
+    transform: translate3d(0.7%, -1.2%, 0) scale(0.99);
   }
 }
 
 /* Breathing brightness rather than opacity on the whole mark, so the
    glow swells while the shape itself stays put. */
+/*
+ * A click anywhere on the landing surges the mark, then it decays back
+ * to its resting breath. Replaces the looping pulse for the duration
+ * rather than stacking with it — two animations on `filter` would mean
+ * one silently overriding the other for as long as both ran.
+ */
+.backdrop__mark--flash svg {
+  animation: backdrop-flash 1100ms var(--ease-out);
+}
+
+@keyframes backdrop-flash {
+  0% {
+    filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
+      drop-shadow(0 0 90px var(--glow-violet));
+  }
+  /* The strike: solid spectrum stops, not the low-alpha glow tokens,
+     so it genuinely out-shines the resting state. */
+  12% {
+    filter: drop-shadow(0 0 26px var(--spectrum-1)) drop-shadow(0 0 70px var(--spectrum-2))
+      drop-shadow(0 0 150px var(--spectrum-3));
+  }
+  100% {
+    filter: drop-shadow(0 0 10px var(--spectrum-2)) drop-shadow(0 0 34px var(--glow-teal))
+      drop-shadow(0 0 90px var(--glow-violet));
+  }
+}
+
 /* Breathing glow rather than opacity on the whole mark, so the light
    swells while the shape itself stays put. */
 @keyframes backdrop-pulse {
@@ -1248,6 +1318,25 @@ input[type="file"].field__input::file-selector-button:hover {
   min-height: 60vh;
   padding: var(--space-7) 0;
   perspective: 1000px;
+
+  /*
+   * Contains the decoration's overflow so it cannot extend the page's
+   * scrollable area.
+   *
+   * Each letter carries a blurred copy scaled to 1.22, and the parallax
+   * loop rewrites every letter's transform on each pointer move. Both
+   * spill past the element, and spilled paint from transforms and
+   * filters counts toward scrollable overflow — so the document's height
+   * changed as the mouse moved, and the scrollbar visibly resized and
+   * slid about on its own.
+   *
+   * `clip` rather than `hidden`: `hidden` would make this a scroll
+   * container in its own right. `overflow-clip-margin` lets the glow
+   * still show past the edge; it just no longer counts as something to
+   * scroll to.
+   */
+  overflow: clip;
+  overflow-clip-margin: 5rem;
 }
 
 /* Holds the word and the colour orbiting it in one stacking context, so
@@ -1456,6 +1545,17 @@ input[type="file"].field__input::file-selector-button:hover {
 
 .drawer--left .drawer__rail {
   inset: 0 0 0 auto;
+}
+
+/*
+ * Must out-specify `.drawer--left .drawer__panel` above, which sets the
+ * off-screen transform. Both are two-class selectors, so plain
+ * `.drawer--open .drawer__panel` ties on specificity and loses on source
+ * order — the panel stayed parked off-screen while the scrim still
+ * blurred the page, which looked exactly like the app hanging.
+ */
+.drawer--left.drawer--open .drawer__panel {
+  transform: none;
 }
 
 @media (max-width: 40rem) {
@@ -1916,6 +2016,60 @@ input[type="file"].field__input::file-selector-button:hover {
   border: none;
   background: none;
   padding: 0;
+}
+
+.credentials {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.credentials__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.credentials__item {
+  padding: var(--space-3);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius);
+  background: var(--surface-base);
+}
+
+.credentials__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.credentials__name {
+  font-weight: 600;
+}
+
+/* Pushes the button to the right edge and takes the slack, so rows line
+   up regardless of how long a provider's name is. */
+.credentials__state {
+  margin-right: auto;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.credentials__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-faint);
+}
+
+.credentials__form a {
+  color: var(--spectrum-1);
 }
 
 .settings__title {

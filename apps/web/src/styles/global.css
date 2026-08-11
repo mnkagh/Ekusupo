@@ -133,20 +133,19 @@ input {
  */
 /* Enough to clear a drawer, not so much that the mark walks off the
    side of a narrow window. */
-.backdrop--shift-left .backdrop__mark {
-  translate: -14% 0;
-}
+/*
+ * The same distance the shell travels, and only at the same widths — so
+ * the mark and the page move together as one surface. Below 40rem the
+ * drawer becomes a bottom sheet and the shell does not shift at all, so
+ * neither does this.
+ */
+@media (min-width: 40rem) {
+  .backdrop--shift-left .backdrop__mark {
+    translate: calc(-1 * var(--drawer-shift)) 0;
+  }
 
-.backdrop--shift-right .backdrop__mark {
-  translate: 14% 0;
-}
-
-/* On a phone the drawer becomes a bottom sheet covering most of the
-   screen — there is no sideways space to move into. */
-@media (max-width: 40rem) {
-  .backdrop--shift-left .backdrop__mark,
   .backdrop--shift-right .backdrop__mark {
-    translate: 0 -18%;
+    translate: var(--drawer-shift) 0;
   }
 }
 
@@ -645,11 +644,27 @@ input {
   transition: transform var(--dur-slow) var(--ease-out);
 }
 
-/* Half the drawer's width, so the centred content ends up centred in
-   what is left of the viewport rather than hidden behind the panel. */
+/*
+ * Half the drawer's width, so the centred content ends up centred in
+ * what is left of the viewport rather than hidden behind the panel.
+ *
+ * Named as a variable because the backdrop has to travel exactly the
+ * same distance. It used to shift by a percentage of its own width,
+ * which is a different number entirely — so the mark and the page slid
+ * apart from each other instead of moving as one thing.
+ */
+:root {
+  --drawer-shift: min(15rem, 8vw);
+}
+
 @media (min-width: 40rem) {
   .shell--shifted {
-    transform: translateX(min(-15rem, -8vw));
+    transform: translateX(calc(-1 * var(--drawer-shift)));
+  }
+
+  /* Settings arrives from the left, so the page steps right. */
+  .shell--shifted-right {
+    transform: translateX(var(--drawer-shift));
   }
 }
 

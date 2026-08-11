@@ -109,11 +109,18 @@ export function App() {
       <IntroScreen key={introRun} />
 
       {/*
-        `shell--shifted` slides the page left while the auth drawer is
-        open, so the centred wordmark moves out from behind the panel
-        instead of sitting half-covered by it.
+        The page steps aside from whichever drawer is open — left for
+        auth, which arrives from the right; right for settings, which
+        arrives from the left — so the content ends up centred in what
+        is left of the viewport instead of sitting half-covered. The
+        backdrop above is given the matching `shift`, and both travel the
+        same `--drawer-shift` distance so they move as one surface.
       */}
-      <div className={`shell ${authDrawer.open ? "shell--shifted" : ""}`}>
+      <div
+        className={`shell ${
+          authDrawer.open ? "shell--shifted" : settingsOpen ? "shell--shifted-right" : ""
+        }`}
+      >
         {/* Without the rail there is no first column to leave room for,
             so the landing spans the full width instead of sitting in a
             gap the missing sidebar used to occupy. */}

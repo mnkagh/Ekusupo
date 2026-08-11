@@ -64,6 +64,32 @@
   --danger-faint: rgb(255 122 138 / 10%);
 
   /*
+   * Semantic surfaces for effects that must *invert* between themes
+   * rather than merely change hue.
+   *
+   * On ink, a raised surface is lighter and a glow is white; on paper
+   * both of those are invisible, and the equivalent is a darker wash and
+   * an ink shadow. Hardcoding `rgb(255 255 255 / 6%)` for a hover state
+   * — as these once were — means the light theme gets white on white.
+   */
+  --overlay-soft: rgb(255 255 255 / 6%);
+  --overlay-strong: rgb(255 255 255 / 12%);
+  /* What a filled button turns into at its brightest. */
+  --overlay-peak: #ffffff;
+  --overlay-peak-glow: rgb(255 255 255 / 35%);
+
+  /* The wordmark's extruded side wall, lit from the front. */
+  --extrude-near: rgb(120 108 150 / 45%);
+  --extrude-far: rgb(76 68 98 / 35%);
+  --extrude-cast: rgb(10 8 18 / 65%);
+  /* Keeps display text legible over whatever sits behind it. */
+  --text-halo: rgb(10 8 18 / 85%);
+
+  /* Colour only — the drawer sets its own offsets, which differ by side. */
+  --shadow-drawer-color: rgb(0 0 0 / 90%);
+  --scrim: rgb(6 4 12 / 74%);
+
+  /*
    * One family, two optical sizes. Inter Tight for headings and Inter
    * for everything else — the same letterforms throughout, so nothing
    * on the page looks borrowed from a different design. The mono is kept
@@ -179,6 +205,33 @@
 
   --danger: #c02648;
   --danger-faint: rgb(192 38 72 / 8%);
+
+  /*
+   * The inversions. Every one of these is the same *idea* as its dark
+   * counterpart expressed the other way up: light added on ink becomes
+   * shade laid on paper.
+   */
+  --overlay-soft: rgb(23 17 34 / 5%);
+  --overlay-strong: rgb(23 17 34 / 10%);
+  /* A filled button's peak is its darkest point here, not its lightest. */
+  --overlay-peak: #171122;
+  --overlay-peak-glow: rgb(23 17 34 / 28%);
+
+  /* The extrusion keeps its violet cast but sits lighter than the
+     letter rather than darker, so the wall still reads as a side face
+     catching light instead of a smear of dirt under the type. */
+  --extrude-near: rgb(150 138 180 / 55%);
+  --extrude-far: rgb(120 108 150 / 40%);
+  --extrude-cast: rgb(23 17 34 / 22%);
+  /* On paper the halo behind display text is paper, not ink. */
+  --text-halo: rgb(255 255 255 / 85%);
+
+  --shadow-drawer-color: rgb(23 17 34 / 30%);
+  /* Still a dark scrim: dimming is how a modal separates itself from the
+     page, and inverting it to a white wash on a white page would remove
+     the separation entirely. Lighter than the dark theme's, because it
+     has less contrast to overcome. */
+  --scrim: rgb(23 17 34 / 45%);
 
   /* Ink-coloured and soft, not black and heavy: a hard black shadow on
      paper reads as a sticker rather than as elevation. */

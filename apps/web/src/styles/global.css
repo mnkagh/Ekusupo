@@ -1096,13 +1096,13 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .btn--ghost {
-  background: rgb(255 255 255 / 6%);
+  background: var(--overlay-soft);
   border-color: var(--line-strong);
   color: var(--text-primary);
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: rgb(255 255 255 / 12%);
+  background: var(--overlay-strong);
   border-color: var(--text-muted);
   color: var(--text-primary);
 }
@@ -1131,9 +1131,9 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .btn--connect:hover:not(:disabled) {
-  background: #fff;
+  background: var(--overlay-peak);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px -10px rgb(255 255 255 / 35%);
+  box-shadow: 0 8px 24px -10px var(--overlay-peak-glow);
 }
 
 /*
@@ -1515,7 +1515,7 @@ input[type="file"].field__input::file-selector-button:hover {
   font-size: var(--text-lg);
   line-height: 1.5;
   color: var(--text-primary);
-  text-shadow: 0 1px 12px rgb(10 8 18 / 85%);
+  text-shadow: 0 1px 12px var(--text-halo);
   max-width: 44ch;
   animation: rise var(--dur-slow) var(--ease-out) both;
   animation-delay: 700ms;
@@ -1560,9 +1560,9 @@ input[type="file"].field__input::file-selector-button:hover {
    * flat plane.
    */
   text-shadow:
-    calc(var(--lean-x, 0) * 1px) calc(var(--lean-y, 0) * 1px) 0 rgb(120 108 150 / 45%),
-    calc(var(--lean-x, 0) * 3px) calc(var(--lean-y, 0) * 3px) 0 rgb(76 68 98 / 35%),
-    calc(var(--lean-x, 0) * 6px) calc(var(--lean-y, 0) * 6px) 20px rgb(10 8 18 / 65%);
+    calc(var(--lean-x, 0) * 1px) calc(var(--lean-y, 0) * 1px) 0 var(--extrude-near),
+    calc(var(--lean-x, 0) * 3px) calc(var(--lean-y, 0) * 3px) 0 var(--extrude-far),
+    calc(var(--lean-x, 0) * 6px) calc(var(--lean-y, 0) * 6px) 20px var(--extrude-cast);
 
   will-change: transform;
   animation: rise var(--dur-slow) var(--ease-out) both;
@@ -1690,7 +1690,7 @@ input[type="file"].field__input::file-selector-button:hover {
   border: none;
   padding: 0;
   cursor: pointer;
-  background: rgb(6 4 12 / 74%);
+  background: var(--scrim);
   /*
    * No `backdrop-filter`. Blurring everything behind a full-screen
    * element forces the browser to re-read and re-blur the whole page on
@@ -1715,7 +1715,7 @@ input[type="file"].field__input::file-selector-button:hover {
   padding: var(--space-5);
   background: linear-gradient(180deg, var(--surface-base), var(--surface-void));
   border-left: 1px solid var(--line);
-  box-shadow: -32px 0 80px -32px rgb(0 0 0 / 90%);
+  box-shadow: -32px 0 80px -32px var(--shadow-drawer-color);
   /* Slides and settles rather than sliding flat — the slight overshoot
      is what separates a panel arriving from a panel being teleported. */
   transform: translateX(102%);
@@ -1732,7 +1732,7 @@ input[type="file"].field__input::file-selector-button:hover {
   inset: 0 auto 0 0;
   border-left: none;
   border-right: 1px solid var(--line);
-  box-shadow: 32px 0 80px -32px rgb(0 0 0 / 90%);
+  box-shadow: 32px 0 80px -32px var(--shadow-drawer-color);
   transform: translateX(-102%);
   /* Wider than auth: this one holds a whole settings surface, not a
      four-field form, and it scrolls. */
@@ -1927,7 +1927,7 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .tile:hover {
-  background: rgb(255 255 255 / 3%);
+  background: var(--overlay-soft);
 }
 
 /* Each tile carries its provider's own accent, revealed on hover — so
@@ -2081,26 +2081,6 @@ input[type="file"].field__input::file-selector-button:hover {
   }
   50% {
     opacity: 1;
-  }
-}
-
-.provider-glyph__note {
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
-.tile--live .provider-glyph__note,
-.tile:hover .provider-glyph__note {
-  animation: note-bob 2s var(--ease-in-out) infinite;
-}
-
-@keyframes note-bob {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-4px) rotate(-4deg);
   }
 }
 

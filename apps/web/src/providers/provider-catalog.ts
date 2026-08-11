@@ -18,7 +18,7 @@ export interface ProviderDescriptor {
   /** Two brand-adjacent stops used only for that tile's own accent. */
   accent: [string, string];
   /** Drawn as an inline SVG path so no external icon dependency is needed. */
-  glyph: "wave" | "note" | "play" | "file";
+  glyph: "wave" | "play" | "file";
 }
 
 /**

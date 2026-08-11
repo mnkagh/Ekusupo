@@ -5,6 +5,8 @@ import type { UpfDocument } from "@ekusupo/upf";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import type { AuthService } from "../auth/auth-service.js";
+import { enforceUserRateLimit } from "../auth/rate-limit-guard.js";
+import { RateLimiter } from "../auth/rate-limiter.js";
 import { requireAuth } from "../auth/session-cookie.js";
 import type { Database } from "../db/client.js";
 import { AppSessionCache } from "../providers/app-session-cache.js";
@@ -35,7 +37,15 @@ export interface TransferRoutesDeps {
    * than Spotify can be constructed. Same map `connect-routes.ts` uses.
    */
   providerCredentials?: Record<string, ProviderCredentials>;
+  /**
+   * How many transfers one account may start per window. Injectable so a
+   * test can set a limit of one instead of starting thirty real jobs.
+   */
+  startLimiter?: RateLimiter;
 }
+
+const FIFTEEN_MINUTES = 15 * 60 * 1000;
+const START_SCOPE = "transfer-start";
 
 const SOURCE_PLAYLIST_ID = { type: "string", minLength: 1, maxLength: 512 } as const;
 const PROVIDER_ID = { type: "string", minLength: 1, maxLength: 64 } as const;
@@ -127,6 +137,31 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
   const makeAppSession = deps.createSpotifyAppSessionImpl ?? createSpotifyAppSession;
   const credentials = deps.providerCredentials ?? {};
   const runner = new TransferRunner(db);
+
+  /**
+   * Starting a transfer is the most expensive thing an account can ask
+   * for: it spawns background work that reads a whole playlist and then
+   * searches the destination once per track. Unthrottled, one signed-in
+   * account could queue thousands and spend both this server's capacity
+   * and the *provider's* rate limit, which is shared across every user
+   * of these credentials (CLAUDE.md §12.6, §13.3).
+   *
+   * Thirty per fifteen minutes is well past what migrating a library by
+   * hand looks like, and nowhere near what a script wants.
+   */
+  const startLimiter =
+    deps.startLimiter ?? new RateLimiter({ limit: 30, windowMs: FIFTEEN_MINUTES });
+
+  /** Returns false and has already answered 429 when the budget is spent. */
+  function allowStart(reply: FastifyReply, userId: string): boolean {
+    return enforceUserRateLimit(
+      reply,
+      startLimiter,
+      START_SCOPE,
+      userId,
+      "Too many transfers started. Wait a few minutes and try again.",
+    );
+  }
 
   const canReadPublicAnonymously = Boolean(deps.spotifyClientId && deps.spotifyClientSecret);
   const appSessions = new AppSessionCache(() =>
@@ -259,6 +294,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
+      if (!allowStart(reply, user.id)) return;
 
       const sourceProviderId = request.body.sourceProvider ?? "spotify";
       const source = await resolveSource(user.id, sourceProviderId, reply);
@@ -302,6 +338,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
+      if (!allowStart(reply, user.id)) return;
 
       // Destination first, deliberately. A destination that cannot be
       // written to is a fixed fact about that provider's API — no amount
@@ -345,6 +382,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     async (request, reply) => {
       const user = await requireAuth(request, reply, authService);
       if (!user) return;
+      if (!allowStart(reply, user.id)) return;
 
       const parsed = parseUpfDocument(request.body.document);
       if (!parsed.ok) {

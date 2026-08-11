@@ -48,15 +48,42 @@ export function enforceRateLimit(
   limiter: RateLimiter,
   scope: string,
 ): boolean {
-  const decision = limiter.check(`${scope}:${request.ip}`);
+  return applyLimit(reply, limiter, `${scope}:${request.ip}`, {
+    error: "Too many attempts. Wait a few minutes and try again.",
+  });
+}
+
+/**
+ * Keyed by **user**, not address — the opposite choice from the
+ * credential limits above, and for the opposite reason. Those guard
+ * routes anyone can reach, where counting per account would let a
+ * stranger lock someone out. This guards routes that already required a
+ * session, so the key can only be spent by the account's own holder;
+ * there is no lockout to hand anyone. Keying these by address instead
+ * would make one office or campus share a single budget.
+ */
+export function enforceUserRateLimit(
+  reply: FastifyReply,
+  limiter: RateLimiter,
+  scope: string,
+  userId: string,
+  message: string,
+): boolean {
+  return applyLimit(reply, limiter, `${scope}:${userId}`, { error: message });
+}
+
+function applyLimit(
+  reply: FastifyReply,
+  limiter: RateLimiter,
+  key: string,
+  body: { error: string },
+): boolean {
+  const decision = limiter.check(key);
   if (decision.allowed) return true;
 
   reply.header("Retry-After", String(decision.retryAfterSeconds));
   reply.code(429);
-  reply.send({
-    error: "Too many attempts. Wait a few minutes and try again.",
-    retryAfterSeconds: decision.retryAfterSeconds,
-  });
+  reply.send({ ...body, retryAfterSeconds: decision.retryAfterSeconds });
   return false;
 }
 

@@ -205,3 +205,124 @@ describe("credential-guessing limits", () => {
     }
   });
 });
+
+describe("transfer-start limits", () => {
+  async function buildTransferLimitedServer(): Promise<FastifyInstance> {
+    const app = await buildServer({
+      transferStartLimiter: new RateLimiter({ limit: 2, windowMs: 60_000 }),
+    });
+    openServers.push(app);
+    return app;
+  }
+
+  /**
+   * Every start route is refused the same way, so the assertion is on the
+   * status alone — none of these get far enough to need a connected
+   * provider, because the limiter runs before any of that.
+   */
+  const startRequests = [
+    { url: "/transfers/dry-run", payload: { sourcePlaylistId: "playlist-1" } },
+    {
+      url: "/transfers/live",
+      payload: { sourcePlaylistId: "playlist-1", destinationProvider: "upf-file", confirm: true },
+    },
+    {
+      url: "/transfers/import-upf",
+      payload: {
+        document: {
+          format: "upf",
+          version: "0.1.0",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          playlists: [],
+        },
+        destinationProvider: "upf-file",
+        confirm: true,
+      },
+    },
+  ];
+
+  it("stops an account queueing transfers without limit", async () => {
+    const app = await buildTransferLimitedServer();
+    const { cookie } = await signUp(app);
+
+    const start = () =>
+      app.inject({
+        method: "POST",
+        url: "/transfers/dry-run",
+        payload: { sourcePlaylistId: "playlist-1" },
+        cookies: { ekusupo_session: cookie },
+      });
+
+    // The first two are refused for their own reasons (no Spotify
+    // connected) — what matters is that they spent budget.
+    expect((await start()).statusCode).not.toBe(429);
+    expect((await start()).statusCode).not.toBe(429);
+
+    const blocked = await start();
+    expect(blocked.statusCode).toBe(429);
+    expect(Number(blocked.headers["retry-after"])).toBeGreaterThan(0);
+    expect(blocked.json().error).toMatch(/Too many transfers/);
+  });
+
+  it("spends one budget across all three start routes", async () => {
+    // Otherwise the limit is sidestepped by rotating between them.
+    const app = await buildTransferLimitedServer();
+    const { cookie } = await signUp(app);
+
+    for (const { url, payload } of startRequests.slice(0, 2)) {
+      const response = await app.inject({
+        method: "POST",
+        url,
+        payload,
+        cookies: { ekusupo_session: cookie },
+      });
+      expect(response.statusCode, url).not.toBe(429);
+    }
+
+    const third = startRequests[2]!;
+    const blocked = await app.inject({
+      method: "POST",
+      url: third.url,
+      payload: third.payload,
+      cookies: { ekusupo_session: cookie },
+    });
+    expect(blocked.statusCode).toBe(429);
+  });
+
+  it("gives each account its own budget, rather than sharing one per address", async () => {
+    // Every request in a test arrives from the same address, so an
+    // address-keyed limit would refuse the second account here. Real
+    // users behind one office NAT would hit exactly that.
+    const app = await buildTransferLimitedServer();
+    const first = await signUp(app);
+    const second = await signUp(app);
+
+    const start = (cookie: string) =>
+      app.inject({
+        method: "POST",
+        url: "/transfers/dry-run",
+        payload: { sourcePlaylistId: "playlist-1" },
+        cookies: { ekusupo_session: cookie },
+      });
+
+    await start(first.cookie);
+    await start(first.cookie);
+    expect((await start(first.cookie)).statusCode).toBe(429);
+
+    expect((await start(second.cookie)).statusCode).not.toBe(429);
+  });
+
+  it("does not throttle reading transfer history", async () => {
+    const app = await buildTransferLimitedServer();
+    const { cookie } = await signUp(app);
+
+    for (let i = 0; i < 5; i += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/transfers",
+        cookies: { ekusupo_session: cookie },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+  });
+});

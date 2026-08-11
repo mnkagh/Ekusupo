@@ -7,6 +7,7 @@ import { corsOriginsFor } from "./cors-origins.js";
 import { PostgresSessionStore } from "./auth/postgres-session-store.js";
 import { PostgresUserStore } from "./auth/postgres-user-store.js";
 import type { AuthRateLimits } from "./auth/rate-limit-guard.js";
+import type { RateLimiter } from "./auth/rate-limiter.js";
 import type { SessionStore } from "./auth/session-store.js";
 import type { UserStore } from "./auth/user-store.js";
 import { ensureSchema, failInterruptedJobs } from "./db/bootstrap.js";
@@ -51,6 +52,12 @@ export interface BuildServerOptions {
    * singleton that leaks state between files.
    */
   authRateLimits?: AuthRateLimits;
+  /**
+   * How many transfers one account may start per window. Same reason as
+   * `authRateLimits`: a test sets a limit of one rather than starting
+   * thirty real jobs, and each server gets its own counters.
+   */
+  transferStartLimiter?: RateLimiter;
   /** See the constructor comment; defaults to `TRUST_PROXY === "true"`. */
   trustProxy?: boolean;
 }
@@ -187,6 +194,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     // The same map the connect routes use, so a destination other than
     // Spotify can be constructed from the credentials already configured.
     providerCredentials: options.providerCredentials,
+    startLimiter: options.transferStartLimiter,
   });
 
   // One set of limiters shared with the auth routes, so the password

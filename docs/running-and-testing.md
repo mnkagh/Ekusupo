@@ -17,6 +17,15 @@ pnpm install
 pnpm build
 ```
 
+`corepack enable` writes shims next to the Node binary, so on Windows it
+fails with `EPERM` unless the shell is elevated. Either run it from an
+admin prompt, or skip corepack entirely and install the pinned version
+directly — it lands in a user-writable directory already on `PATH`:
+
+```sh
+npm install -g pnpm@11.15.1   # the version package.json pins
+```
+
 Then create the API's environment file:
 
 ```sh
@@ -33,20 +42,27 @@ explains how to generate. Leave the Spotify values blank for now —
 pnpm build         # tsc -b across every package
 pnpm lint          # eslint
 pnpm format:check  # prettier
-pnpm test          # vitest, 437 tests
+pnpm test          # vitest, 526 tests
 pnpm audit         # dependency vulnerabilities
 ```
 
 All five should pass with no output beyond the command echo. `pnpm test`
-takes roughly 30 seconds; `services/api`'s tests are slower than the
+takes roughly 45 seconds; `services/api`'s tests are slower than the
 rest because they run against a real embedded Postgres rather than a
 mock (ADR-0024), and each one boots its own instance.
 
-Because every one of those tests compiles and boots a real database,
-the suite is unusually sensitive to a busy machine. **Stop the API
-server and `db:serve` before running it** — leaving one running can
-starve the tests into timeouts that look like real failures but
-disappear on a quiet machine.
+**Stop the API server and `db:serve` before running it.** Each test
+compiles and boots a real database, so a machine already busy running
+one can push the slowest of them close to their timeout.
+
+This section used to say that timeouts here were a busy-machine
+artefact. Mostly they were not: every test that built a server or
+called `createDb()` leaked its embedded Postgres, so a run accumulated
+roughly 120 live WASM heaps and the setup for the next test eventually
+timed out. Instances are closed now (`db/test-database.ts`, and
+`buildServer` closes the one it opens), which took about a fifth off
+the suite's runtime. If you see a timeout that survives a quiet
+machine, suspect a leak rather than the hardware.
 
 To run a subset:
 
@@ -431,6 +447,13 @@ The **Account** panel is where CLAUDE.md §21.2's promises live:
   transfer history and UPF exports all cascade with it, and the email
   becomes free to sign up with again.
 
+Transfer history is deletable one run at a time as well, from the
+**Recent** list on the Transfer panel — two clicks, because it also
+destroys that run's report and its stored UPF export. A transfer that
+is still running refuses to be deleted (409) until it is cancelled: the
+runner writes progress to that row between tracks, so removing it
+mid-flight would send every later write to a row that no longer exists.
+
 ## 7. Resetting
 
 ```sh
@@ -479,10 +502,12 @@ hitting one:
   the job with a reason rather than picking it up again. Resuming needs
   to record how far the writes got, which nothing does yet
   (CLAUDE.md §9.3).
-- **Rate limiting beyond credential guessing.** Sign-in, sign-up and the
-  password checks are throttled; the transfer routes are not. The
-  limiter is also per-process and in memory, so it resets on restart and
-  does not span instances.
+- **Rate limiting that survives a restart.** Sign-in, sign-up and the
+  password checks are throttled per address; starting a transfer is
+  throttled per account (30 per 15 minutes, one budget across all three
+  start routes). But the limiter is per-process and in memory, so it
+  resets on restart and does not span instances — a second replica would
+  double every limit.
 - **A transfer into YouTube longer than about 200 tracks.**
   `playlistItems.insert` costs 50 quota units and the default daily
   allowance is 10,000, so a long playlist exhausts the account's quota
@@ -492,4 +517,6 @@ hitting one:
 - **Hosted Postgres.** `pglite` is real Postgres, but embedded and
   single-process. Swapping in a hosted instance is a driver change, not
   a redesign.
-- **Deployment.** There is no container, no CI pipeline, no hosting.
+- **Somewhere to deploy it.** There is a container per service and a CI
+  workflow (see the "Deploying it anywhere" entry above) — what is
+  missing is a host: no registry, no TLS, no domain, no backups.

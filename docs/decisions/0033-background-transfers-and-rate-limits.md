@@ -109,6 +109,15 @@ pollUrl }`; the report is no longer in that response. Every client had
   additive `ALTER TABLE … IF NOT EXISTS` pattern as `upf_document`.
 - Sign-in, sign-up, password change and account deletion return **429**
   with `Retry-After` once their budget is spent.
+- Starting a transfer is throttled too, but keyed by **user id rather
+  than address** — the opposite choice, for the opposite reason. The
+  credential limits guard routes anyone can reach, where counting per
+  account would let a stranger lock someone out; the start routes
+  already require a session, so the key can only be spent by the
+  account's own holder and there is no lockout to hand anyone. Keying
+  these by address would instead make one office share one budget. All
+  three start routes draw on a single budget, or the limit would be
+  sidestepped by rotating between them.
 - **The limiter is per-process and in memory.** It resets on restart and
   does not span instances. Running several behind a load balancer needs a
   shared store — a driver change the interface already allows.

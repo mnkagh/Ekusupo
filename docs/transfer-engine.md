@@ -224,6 +224,7 @@ are scoped to the calling user — see ADR-0027 and ADR-0032.
 | `GET /transfers`             | The caller's jobs, newest first, each with its stored report, `progress`, and a `hasUpfDocument` flag.                                  |
 | `GET /transfers/:id`         | One job. 404 if it does not exist **or belongs to another user** — the two are deliberately indistinguishable.                          |
 | `GET /transfers/:id/upf`     | The UPF document that transfer produced, as a download. 404 when there is none, or it is another user's.                                |
+| `DELETE /transfers/:id`      | Removes a finished job from history with its report and UPF export (CLAUDE.md §21.2). 409 while it is still running — cancel it first.  |
 
 ### Transfers run in the background
 

@@ -2,10 +2,9 @@ import type { TransferJob, TransferReport } from "@ekusupo/core";
 import { UPF_FORMAT_NAME, UPF_FORMAT_VERSION } from "@ekusupo/upf";
 import type { UpfDocument } from "@ekusupo/upf";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ensureSchema } from "../db/bootstrap.js";
-import { createDb } from "../db/client.js";
+import { createTestDatabase } from "../db/test-database.js";
 import type { Database } from "../db/client.js";
 import { usersTable } from "../db/schema.js";
 import { PostgresTransferJobStore } from "./postgres-transfer-job-store.js";
@@ -28,13 +27,17 @@ function makeJob(overrides: Partial<TransferJob> = {}): TransferJob {
 }
 
 let db: Database;
+let closeDb: () => Promise<void>;
 let storeA: PostgresTransferJobStore;
 let storeB: PostgresTransferJobStore;
 
+afterEach(async () => {
+  await closeDb();
+});
+
 beforeEach(async () => {
   // In-memory pglite — a real, fresh Postgres instance per test. See ADR-0024.
-  db = createDb();
-  await ensureSchema(db);
+  ({ db, close: closeDb } = await createTestDatabase());
   await db.insert(usersTable).values([
     { id: USER_A, email: "a@example.com", passwordHash: "x", createdAt: new Date() },
     { id: USER_B, email: "b@example.com", passwordHash: "x", createdAt: new Date() },

@@ -1,8 +1,7 @@
 import { sql } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ensureSchema } from "../db/bootstrap.js";
-import { createDb } from "../db/client.js";
+import { createTestDatabase } from "../db/test-database.js";
 import type { Database } from "../db/client.js";
 import { PostgresUserStore } from "./postgres-user-store.js";
 import { PostgresSessionStore } from "./postgres-session-store.js";
@@ -21,11 +20,15 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 let db: Database;
+let closeDb: () => Promise<void>;
 let store: PostgresSessionStore;
 
+afterEach(async () => {
+  await closeDb();
+});
+
 beforeEach(async () => {
-  db = createDb();
-  await ensureSchema(db);
+  ({ db, close: closeDb } = await createTestDatabase());
   // Sessions reference users via a foreign key — a real row has to
   // exist first, the same constraint a real deployment would enforce.
   await new PostgresUserStore(db).create({

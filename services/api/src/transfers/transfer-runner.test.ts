@@ -1,9 +1,9 @@
 import type { AuthSession, MusicProvider } from "@ekusupo/connector-sdk";
 import type { Playlist, Track } from "@ekusupo/upf";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ensureSchema, failInterruptedJobs } from "../db/bootstrap.js";
-import { createDb } from "../db/client.js";
+import { failInterruptedJobs } from "../db/bootstrap.js";
+import { createTestDatabase } from "../db/test-database.js";
 import type { Database } from "../db/client.js";
 import { usersTable } from "../db/schema.js";
 import { PostgresTransferJobStore } from "./postgres-transfer-job-store.js";
@@ -54,12 +54,16 @@ function fakeSource(
 }
 
 let db: Database;
+let closeDb: () => Promise<void>;
 let runner: TransferRunner;
 let store: PostgresTransferJobStore;
 
+afterEach(async () => {
+  await closeDb();
+});
+
 beforeEach(async () => {
-  db = createDb();
-  await ensureSchema(db);
+  ({ db, close: closeDb } = await createTestDatabase());
   await db
     .insert(usersTable)
     .values({ id: USER, email: "a@example.com", passwordHash: "x", createdAt: new Date() });

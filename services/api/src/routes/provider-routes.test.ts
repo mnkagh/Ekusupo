@@ -54,8 +54,10 @@ beforeEach(() => {
   process.env.PROVIDER_TOKEN_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 });
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PROVIDER_TOKEN_ENCRYPTION_KEY = originalKey;
+  // See server.test.ts — the server owns the pglite instance it opened.
+  await app?.close();
 });
 
 describe("GET /providers", () => {

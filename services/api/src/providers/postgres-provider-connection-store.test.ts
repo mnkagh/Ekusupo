@@ -1,8 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { PostgresUserStore } from "../auth/postgres-user-store.js";
-import { ensureSchema } from "../db/bootstrap.js";
-import { createDb } from "../db/client.js";
+import { createTestDatabase } from "../db/test-database.js";
 import type { Database } from "../db/client.js";
 import { usersTable } from "../db/schema.js";
 import { PostgresProviderConnectionStore } from "./postgres-provider-connection-store.js";
@@ -22,11 +21,15 @@ function makeConnection(overrides: Partial<ProviderConnection> = {}): ProviderCo
 }
 
 let db: Database;
+let closeDb: () => Promise<void>;
 let store: PostgresProviderConnectionStore;
 
+afterEach(async () => {
+  await closeDb();
+});
+
 beforeEach(async () => {
-  db = createDb();
-  await ensureSchema(db);
+  ({ db, close: closeDb } = await createTestDatabase());
   await new PostgresUserStore(db).create({
     id: USER_ID,
     email: "user@example.com",

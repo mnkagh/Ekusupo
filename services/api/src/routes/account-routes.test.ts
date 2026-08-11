@@ -32,8 +32,12 @@ beforeEach(() => {
   process.env.PROVIDER_TOKEN_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 });
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PROVIDER_TOKEN_ENCRYPTION_KEY = originalKey;
+  // Frees the embedded Postgres the server opened for itself. Each one
+  // is a whole WASM heap, and leaving them open across a suite run is
+  // what made pglite setup time out at random — see server.test.ts.
+  await app?.close();
 });
 
 describe("POST /account/password", () => {

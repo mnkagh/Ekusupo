@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createAuthRateLimits } from "../auth/rate-limit-guard.js";
 import { RateLimiter } from "../auth/rate-limiter.js";
@@ -17,6 +17,25 @@ function tightLimits() {
     sensitive: new RateLimiter({ limit: 2, windowMs: 60_000 }),
   });
 }
+
+/**
+ * Every test here needs its own counters, so each builds its own
+ * server — and each of those opens its own embedded Postgres. Tracking
+ * them means teardown frees them even when a test fails part-way, which
+ * a `close()` at the end of the test body would skip. See server.test.ts.
+ */
+let openServers: FastifyInstance[] = [];
+
+async function buildThrottledServer(): Promise<FastifyInstance> {
+  const app = await buildServer({ authRateLimits: tightLimits() });
+  openServers.push(app);
+  return app;
+}
+
+afterEach(async () => {
+  await Promise.all(openServers.map((app) => app.close()));
+  openServers = [];
+});
 
 function newEmail(): string {
   return `user-${randomBytes(4).toString("hex")}@example.com`;
@@ -37,7 +56,7 @@ async function signUp(app: FastifyInstance, email = newEmail()) {
 
 describe("credential-guessing limits", () => {
   it("stops repeated wrong-password sign-ins with a 429 and a Retry-After", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { email } = await signUp(app);
 
     const attempt = () =>
@@ -57,7 +76,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("refuses the correct password too, once the budget is spent", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { email } = await signUp(app);
 
     for (let i = 0; i < 2; i += 1) {
@@ -79,7 +98,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("a successful sign-in clears the budget, so typos are not cumulative", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { email } = await signUp(app);
 
     const wrong = await app.inject({
@@ -108,7 +127,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("throttles mass account creation", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
 
     expect((await signUp(app)).response.statusCode).toBe(201);
     expect((await signUp(app)).response.statusCode).toBe(201);
@@ -116,7 +135,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("keeps separate budgets per route, so signing up does not lock out signing in", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { email } = await signUp(app);
     await signUp(app);
     // Sign-up budget is now spent.
@@ -131,7 +150,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("throttles password changes, which are also a password check", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { cookie } = await signUp(app);
 
     const attempt = () =>
@@ -148,7 +167,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("shares one budget between password change and account deletion", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { cookie } = await signUp(app);
 
     // Spending it here...
@@ -173,7 +192,7 @@ describe("credential-guessing limits", () => {
   });
 
   it("does not throttle reads", async () => {
-    const app = await buildServer({ authRateLimits: tightLimits() });
+    const app = await buildThrottledServer();
     const { cookie } = await signUp(app);
 
     for (let i = 0; i < 6; i += 1) {

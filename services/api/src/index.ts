@@ -47,6 +47,31 @@ async function main(): Promise<void> {
     },
   });
 
+  // `docker stop` sends SIGTERM and waits ten seconds before SIGKILL.
+  // Without this the process died with the database mid-write and with
+  // connections still open — survivable for pglite, but it is a real
+  // on-disk database (unlike the in-memory one tests use), so shutting
+  // it down cleanly is the difference between a checkpointed file and
+  // one that has to recover on next boot.
+  let shuttingDown = false;
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.on(signal, () => {
+      if (shuttingDown) return; // a second Ctrl-C shouldn't re-enter this
+      shuttingDown = true;
+      console.log(`[Ekusupo API] ${signal} received — shutting down`);
+      void (async () => {
+        try {
+          await app.close(); // stops accepting, drains in-flight requests
+          await db.$client.close();
+          process.exit(0);
+        } catch (error) {
+          console.error("[Ekusupo API] shutdown failed", error);
+          process.exit(1);
+        }
+      })();
+    });
+  }
+
   await app.listen({ port, host: "0.0.0.0" });
   console.log(`[Ekusupo API] listening on port ${port} (database: ${databasePath})`);
   if (!process.env.SPOTIFY_CLIENT_ID) {

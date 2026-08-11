@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 
 import { SESSION_COOKIE_NAME } from "../auth/session-cookie.js";
@@ -8,6 +8,12 @@ let app: FastifyInstance;
 
 beforeEach(async () => {
   app = await buildServer();
+});
+
+afterEach(async () => {
+  // Frees the embedded Postgres the server opened for itself — see
+  // server.test.ts. Each one is a whole WASM heap.
+  await app?.close();
 });
 
 function sessionCookieFrom(response: { cookies: { name: string; value: string }[] }) {

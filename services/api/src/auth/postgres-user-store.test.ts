@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ensureSchema } from "../db/bootstrap.js";
-import { createDb } from "../db/client.js";
+import { createTestDatabase } from "../db/test-database.js";
 import type { Database } from "../db/client.js";
 import { PostgresUserStore } from "./postgres-user-store.js";
 import type { User } from "./user.js";
@@ -17,14 +16,18 @@ function makeUser(overrides: Partial<User> = {}): User {
 }
 
 let db: Database;
+let closeDb: () => Promise<void>;
 let store: PostgresUserStore;
 
 beforeEach(async () => {
   // In-memory pglite — a real, fresh Postgres instance per test, not a
   // shared/mocked one. See ADR-0024.
-  db = createDb();
-  await ensureSchema(db);
+  ({ db, close: closeDb } = await createTestDatabase());
   store = new PostgresUserStore(db);
+});
+
+afterEach(async () => {
+  await closeDb();
 });
 
 describe("PostgresUserStore", () => {

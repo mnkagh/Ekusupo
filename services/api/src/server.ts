@@ -10,7 +10,7 @@ import type { AuthRateLimits } from "./auth/rate-limit-guard.js";
 import type { SessionStore } from "./auth/session-store.js";
 import type { UserStore } from "./auth/user-store.js";
 import { ensureSchema, failInterruptedJobs } from "./db/bootstrap.js";
-import { createDb } from "./db/client.js";
+import { createDbFromClient, createPgliteClient } from "./db/client.js";
 import type { Database } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import type { ProviderConnectionStore } from "./providers/provider-connection-store.js";
@@ -85,7 +85,22 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   // to Postgres would violate them on insert. The in-memory stores
   // ADR-0022 introduced predate this `db` existing and remain available
   // by injection, but are no longer the default.
-  const db = options.db ?? createDb();
+  //
+  // Whoever creates the instance closes it. A caller that passes `db`
+  // keeps ownership (index.ts holds one for the process lifetime); a
+  // caller that passes nothing gets one created here, and then it is
+  // this server's job to free it on `close()`. Without that, every
+  // `buildServer()` in a test file stranded a whole WASM Postgres heap
+  // that lived until the worker exited — ~120 of them across a suite
+  // run, which is what made the pglite setup time out at random.
+  let db: Database;
+  if (options.db) {
+    db = options.db;
+  } else {
+    const ownedClient = createPgliteClient();
+    db = createDbFromClient(ownedClient);
+    app.addHook("onClose", () => ownedClient.close());
+  }
   await ensureSchema(db);
 
   // Transfers run in this process (ADR-0033), so anything left `running`

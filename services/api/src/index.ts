@@ -4,6 +4,7 @@ import { corsOriginsFor } from "./cors-origins.js";
 import { createDb } from "./db/client.js";
 import { PostgresProviderConnectionStore } from "./providers/postgres-provider-connection-store.js";
 import { buildServer } from "./server.js";
+import { installShutdownHandlers } from "./shutdown.js";
 
 const port = Number(process.env.PORT ?? 3000);
 // A real path, unlike buildServer()'s own in-memory-by-default (test)
@@ -53,24 +54,10 @@ async function main(): Promise<void> {
   // on-disk database (unlike the in-memory one tests use), so shutting
   // it down cleanly is the difference between a checkpointed file and
   // one that has to recover on next boot.
-  let shuttingDown = false;
-  for (const signal of ["SIGTERM", "SIGINT"] as const) {
-    process.on(signal, () => {
-      if (shuttingDown) return; // a second Ctrl-C shouldn't re-enter this
-      shuttingDown = true;
-      console.log(`[Ekusupo API] ${signal} received — shutting down`);
-      void (async () => {
-        try {
-          await app.close(); // stops accepting, drains in-flight requests
-          await db.$client.close();
-          process.exit(0);
-        } catch (error) {
-          console.error("[Ekusupo API] shutdown failed", error);
-          process.exit(1);
-        }
-      })();
-    });
-  }
+  installShutdownHandlers({
+    closeServer: () => app.close(),
+    closeDatabase: () => db.$client.close(),
+  });
 
   await app.listen({ port, host: "0.0.0.0" });
   console.log(`[Ekusupo API] listening on port ${port} (database: ${databasePath})`);

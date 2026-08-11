@@ -1321,13 +1321,23 @@ input[type="file"].field__input::file-selector-button:hover {
  * with, and it splits attention between "what is this" and "log in"
  * before the first question is answered.
  */
+/*
+ * Sized to fit the viewport rather than to overflow it by a little.
+ *
+ * This used to stack 4rem of its own padding on top of `.immersive`'s
+ * 3rem and a 60vh minimum, which on a shorter window pushed the landing
+ * just past the screen. The result was a scrollbar with a scroll range
+ * of a few dozen pixels — enough to appear and to lurch whenever
+ * anything on the page shifted, but not enough to be useful. A landing
+ * page with nothing below the fold should not scroll at all.
+ */
 .landing {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-5);
-  padding: var(--space-8) 0;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
   max-width: 54rem;
 }
 
@@ -1405,8 +1415,10 @@ input[type="file"].field__input::file-selector-button:hover {
   gap: var(--space-6);
   text-align: center;
   width: 100%;
-  min-height: 60vh;
-  padding: var(--space-7) 0;
+  /* Fills what is left after the shell's own padding, rather than
+     declaring a height that adds to it. */
+  min-height: 0;
+  padding: var(--space-4) 0;
   perspective: 1000px;
 
   /*

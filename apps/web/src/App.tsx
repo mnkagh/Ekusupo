@@ -8,6 +8,7 @@ import { ImmersiveLanding } from "./landing/ImmersiveLanding.js";
 import { ProvidersScreen } from "./providers/ProvidersScreen.js";
 import { SettingsDrawer } from "./settings/SettingsDrawer.js";
 import { SettingsIcon } from "./ui/icons.js";
+import { PasteTracklist } from "./transfers/PasteTracklist.js";
 import { TransferScreen } from "./transfers/TransferScreen.js";
 import { UpfScreen } from "./transfers/UpfScreen.js";
 import { Backdrop } from "./visuals/Backdrop.js";
@@ -181,6 +182,7 @@ export function App() {
                   </p>
                 )}
                 <TransferScreen />
+                <PasteTracklist />
                 <ProvidersScreen />
                 <UpfScreen />
               </main>

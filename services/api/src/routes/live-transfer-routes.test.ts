@@ -548,3 +548,93 @@ describe("POST /transfers/import-upf", () => {
     expect(missing.json().error).toMatch(/no playlist "third"/);
   });
 });
+
+describe("POST /transfers/import-tracklist", () => {
+  const PASTED = ["1. The Killers - Mr. Brightside", "2. Daft Punk - One More Time"].join("\n");
+
+  it("requires authentication and an explicit confirmation", async () => {
+    app = await buildServer();
+    const unauthenticated = await app.inject({
+      method: "POST",
+      url: "/transfers/import-tracklist",
+      payload: { text: PASTED, destinationProvider: "upf", confirm: true },
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+
+    const sessionCookie = await signUpAndGetCookie();
+    const unconfirmed = await app.inject({
+      method: "POST",
+      url: "/transfers/import-tracklist",
+      payload: { text: PASTED, destinationProvider: "upf" },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+    expect(unconfirmed.statusCode).toBe(400);
+  });
+
+  it("turns pasted text into a real transfer", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const { started, transfer } = await runToCompletion(
+      sessionCookie,
+      "/transfers/import-tracklist",
+      { text: PASTED, destinationProvider: "upf", title: "From my notes", confirm: true },
+    );
+
+    expect(started.statusCode).toBe(202);
+    expect((transfer?.report as { totalItems: number }).totalItems).toBe(2);
+  });
+
+  it("returns the lines it could not read, rather than dropping them silently", async () => {
+    // The transfer is genuinely missing those tracks, and the user is the
+    // only one who can fix the text.
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/import-tracklist",
+      payload: {
+        text: "The Killers - Mr. Brightside\njust a title with no artist",
+        destinationProvider: "upf",
+        confirm: true,
+      },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().skippedLines).toEqual([
+      expect.objectContaining({ line: 2, reason: expect.stringContaining("No artist") }),
+    ]);
+  });
+
+  it("explains itself when nothing in the text is a track", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/import-tracklist",
+      payload: { text: "?????\n!!!!!", destinationProvider: "upf", confirm: true },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/Artist - Title/);
+    expect(response.json().problems.length).toBeGreaterThan(0);
+  });
+
+  it("rejects an empty paste at the schema, before any work starts", async () => {
+    app = await buildServer();
+    const sessionCookie = await signUpAndGetCookie();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/transfers/import-tracklist",
+      payload: { text: "", destinationProvider: "upf", confirm: true },
+      cookies: { ekusupo_session: sessionCookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+});

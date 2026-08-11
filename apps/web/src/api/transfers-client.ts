@@ -78,6 +78,13 @@ export interface StartedTransfer {
   usedConnectedAccount?: boolean;
 }
 
+/** A pasted line that could not be read as a track. */
+export interface SkippedLine {
+  line: number;
+  raw: string;
+  reason: string;
+}
+
 /** A job is finished when its status is one of these. */
 export const TERMINAL_STATUSES = ["completed", "partial", "failed", "cancelled"] as const;
 
@@ -202,6 +209,28 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
           destinationProvider,
           confirm: true,
           ...(playlistId ? { playlistId } : {}),
+        }),
+      });
+    },
+
+    /**
+     * Starts a transfer from text someone pasted. Resolves with the job
+     * and, when some lines could not be read, the list of them — the
+     * transfer really is missing those tracks, so they are surfaced
+     * rather than dropped.
+     */
+    importTracklist(
+      text: string,
+      destinationProvider: string,
+      title?: string,
+    ): Promise<StartedTransfer & { skippedLines?: SkippedLine[] }> {
+      return request("/transfers/import-tracklist", {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          destinationProvider,
+          confirm: true,
+          ...(title ? { title } : {}),
         }),
       });
     },

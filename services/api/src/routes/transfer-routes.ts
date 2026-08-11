@@ -1,6 +1,12 @@
 import type { AuthSession, MusicProvider } from "@ekusupo/connector-sdk";
 import { createSpotifyAppSession, createSpotifyProvider } from "@ekusupo/provider-spotify";
-import { parseUpfDocument } from "@ekusupo/upf";
+import {
+  parseTracklist,
+  parseUpfDocument,
+  tracklistToPlaylist,
+  UPF_FORMAT_NAME,
+  UPF_FORMAT_VERSION,
+} from "@ekusupo/upf";
 import type { UpfDocument } from "@ekusupo/upf";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
@@ -98,6 +104,29 @@ const importSchema = {
     },
   },
 };
+
+const tracklistSchema = {
+  body: {
+    type: "object",
+    required: ["text", "destinationProvider", "confirm"],
+    properties: {
+      // Capped generously: a very long playlist pasted as text is the
+      // point of the feature, but an unbounded body is a denial-of-
+      // service surface.
+      text: { type: "string", minLength: 1, maxLength: 500_000 },
+      destinationProvider: PROVIDER_ID,
+      title: { type: "string", minLength: 1, maxLength: 200 },
+      confirm: { const: true },
+    },
+  },
+};
+
+interface TracklistBody {
+  text: string;
+  destinationProvider: string;
+  title?: string;
+  confirm: true;
+}
 
 interface DryRunBody {
   sourcePlaylistId: string;
@@ -504,6 +533,79 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     }
     return { transfer: job };
   });
+
+  /**
+   * A playlist someone pasted as plain text.
+   *
+   * The source here is not a provider at all — it is a note, a
+   * spreadsheet column, a message from a friend. That is the whole
+   * point: getting a list like that into a music service is exactly the
+   * manual work this product exists to remove, and it needs no
+   * integration on the source side.
+   *
+   * Once parsed it joins the ordinary path: the tracks become a UPF
+   * document, and the same scratch-file connector and engine that serve
+   * UPF import take it from there. Nothing about matching or writing is
+   * special-cased for pasted text.
+   */
+  app.post<{ Body: TracklistBody }>(
+    "/transfers/import-tracklist",
+    { schema: tracklistSchema },
+    async (request, reply) => {
+      const user = await requireAuth(request, reply, authService);
+      if (!user) return;
+      if (!allowStart(reply, user.id)) return;
+
+      const { tracks, skipped } = parseTracklist(request.body.text);
+      if (tracks.length === 0) {
+        reply.code(400);
+        return {
+          error: "Nothing in that text looked like a track. Use one “Artist - Title” per line.",
+          problems: skipped.map((entry) => ({
+            path: `line ${entry.line}`,
+            message: entry.reason,
+          })),
+        };
+      }
+
+      const destination = await resolveDestination(
+        user.id,
+        request.body.destinationProvider,
+        reply,
+      );
+      if (!destination) return;
+
+      const playlist = tracklistToPlaylist(request.body.title ?? "Pasted playlist", tracks);
+      const document: UpfDocument = {
+        format: UPF_FORMAT_NAME,
+        version: UPF_FORMAT_VERSION,
+        createdAt: new Date().toISOString(),
+        playlists: [playlist],
+      };
+
+      const scratch = await createUpfScratchFile(document);
+
+      const started = await startJob(reply, {
+        userId: user.id,
+        mode: "live",
+        source: {
+          provider: scratch.provider,
+          session: scratch.session,
+          dispose: scratch.dispose,
+        },
+        destination: destination.end,
+        sourcePlaylistId: playlist.id,
+        collectUpfDocument: destination.read,
+      });
+
+      // Lines that could not be read are returned with the job rather
+      // than dropped: the transfer is genuinely missing them, and the
+      // user is the only one who can fix the text.
+      return skipped.length > 0
+        ? { ...(started as Record<string, unknown>), skippedLines: skipped }
+        : started;
+    },
+  );
 
   /**
    * Removes a finished transfer from history, with its report and its

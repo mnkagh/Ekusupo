@@ -2018,6 +2018,16 @@ input[type="file"].field__input::file-selector-button:hover {
   padding: 0;
 }
 
+/* A textarea has to opt back in to the field styling's sizing, and
+   `resize: vertical` keeps someone from dragging it sideways out of the
+   panel. */
+.field__input--area {
+  width: 100%;
+  resize: vertical;
+  min-height: 8rem;
+  line-height: 1.5;
+}
+
 .credentials {
   display: flex;
   flex-direction: column;

@@ -8,12 +8,19 @@ on:
     branches: [main, develop]
   pull_request:
 
-# A new push to the same branch cancels the run still going for the old
-# one: only the newest commit's result means anything, and paying for
-# both slows down the queue for everyone.
+# On a pull request, a new push supersedes the old one: only the newest
+# commit's result means anything while a branch is being iterated on.
+#
+# On a push to main or develop it does NOT cancel, deliberately. Those
+# commits are permanent history, and a cancelled run leaves them marked
+# "not successful" forever with no way to tell a real failure from a run
+# that was simply interrupted by the next push. Several commits here
+# ended up in exactly that state — `build-clients` finished in ~35s and
+# was recorded, while `verify` took ~3min and was killed mid-run every
+# time. Every commit on a permanent branch gets a real answer.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

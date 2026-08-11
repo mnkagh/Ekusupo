@@ -1472,12 +1472,13 @@ input[type="file"].field__input::file-selector-button:hover {
    * regardless of how wide the margin is. The margin only decides how
    * much of the glow is allowed to be seen.
    *
-   * Sized for the widest thing here: the stage's gradient halo, which
-   * reaches about eight rem past the word. Kept no larger than it needs
-   * to be — every rem of margin is more area the compositor has to keep
-   * around.
+   * Sized for the widest thing here: the stage's halo is a circle of
+   * 92vmin, so it reaches roughly 22rem past the word on a typical
+   * screen. A margin smaller than that would slice the circle — which is
+   * exactly what made an earlier version of this glow look like a half
+   * circle.
    */
-  overflow-clip-margin: 12rem;
+  overflow-clip-margin: 26rem;
 }
 
 /* Holds the word and the colour orbiting it in one stacking context, so
@@ -1608,40 +1609,53 @@ input[type="file"].field__input::file-selector-button:hover {
 .immersive__stage::before {
   content: "";
   position: absolute;
-  /* Reaches well past the word without changing its box. */
-  inset: -60% -25%;
   z-index: -2;
   pointer-events: none;
 
-  background:
-    radial-gradient(
-      ellipse 45% 55% at 30% 50%,
-      color-mix(in srgb, var(--spectrum-1) 30%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 50% 60% at 55% 45%,
-      color-mix(in srgb, var(--spectrum-2) 34%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 45% 55% at 78% 55%,
-      color-mix(in srgb, var(--spectrum-3) 28%, transparent),
-      transparent 70%
-    );
+  /*
+   * A square box centred on the word, so `closest-side` describes a
+   * genuine circle. Sizing the box by `inset` instead made it as wide
+   * and flat as the word itself, and the gradient inherited that shape —
+   * which is why the colour read as a band smeared along the letters
+   * rather than as a halo around them.
+   */
+  left: 50%;
+  top: 50%;
+  width: min(92vmin, 94vw);
+  height: min(92vmin, 94vw);
+  translate: -50% -50%;
+
+  /*
+   * Clear in the middle and coloured from the letters outward. The word
+   * sits inside roughly the first third of the radius, so the first stop
+   * holds transparent to there — colour laid over the glyphs would grey
+   * them down, and the point is a ring of light *around* the word.
+   */
+  background: radial-gradient(
+    circle closest-side,
+    transparent 30%,
+    color-mix(in srgb, var(--spectrum-1) 26%, transparent) 46%,
+    color-mix(in srgb, var(--spectrum-2) 30%, transparent) 64%,
+    color-mix(in srgb, var(--spectrum-3) 22%, transparent) 82%,
+    transparent 100%
+  );
 
   animation: halo-breathe 12s var(--ease-in-out) infinite;
 }
 
-/* Scale only, and on a single element — cheap enough to run forever. */
+/*
+ * Scale only, on a single element — cheap enough to run forever.
+ * `scale` rather than `transform`, because `translate` already owns the
+ * centring above and one would overwrite the other.
+ */
 @keyframes halo-breathe {
   0%,
   100% {
-    transform: scale(1);
+    scale: 1;
     opacity: 0.85;
   }
   50% {
-    transform: scale(1.08);
+    scale: 1.06;
     opacity: 1;
   }
 }

@@ -600,3 +600,36 @@ describe("runTransfer", () => {
     });
   });
 });
+
+describe("when creating the destination playlist fails", () => {
+  it("fails the job instead of leaving it running forever", async () => {
+    // The one remote call that used to have neither a retry nor a guard:
+    // an exception here escaped runTransfer entirely and left the job at
+    // `running` in the store for good.
+    const source = makeSource(playlist([track({ id: "s1", title: "Song A" })]));
+    const destination = makeDestination({
+      search: async () => ({ items: [] }),
+    });
+    destination.createPlaylist = async () => {
+      throw new ConnectorError("provider_unavailable", "destination blew up", { retryable: false });
+    };
+    const jobStore = new InMemoryTransferJobStore();
+
+    const { job, report } = await runLiveTransfer({
+      source,
+      sourceSession,
+      destination,
+      destinationSession,
+      sourcePlaylistId: "playlist-1",
+      jobStore,
+    });
+
+    expect(job.status).toBe("failed");
+    expect(report.failureReason).toContain("Could not create the destination playlist");
+    expect(report.failureReason).toContain("destination blew up");
+
+    // And the stored record agrees with the returned one — this is the
+    // property the missing guard broke.
+    expect((await jobStore.get(job.id))?.status).toBe("failed");
+  });
+});

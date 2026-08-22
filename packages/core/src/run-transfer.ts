@@ -363,12 +363,27 @@ export async function runLiveTransfer(params: RunTransferParams): Promise<RunTra
 
   onProgress?.({ step: "reading_source" });
 
-  const createdPlaylist = await createPlaylist(destinationSession, {
-    title: playlist.title,
-    description: playlist.description,
-    privacy: playlist.privacy === "unknown" ? undefined : playlist.privacy,
-  });
-  const destinationPlaylistId = createdPlaylist.id;
+  let destinationPlaylistId: string;
+  try {
+    const createdPlaylist = await createPlaylist(destinationSession, {
+      title: playlist.title,
+      description: playlist.description,
+      privacy: playlist.privacy === "unknown" ? undefined : playlist.privacy,
+    });
+    destinationPlaylistId = createdPlaylist.id;
+  } catch (error) {
+    // The one remote call that had neither a retry nor a guard. An
+    // exception here used to escape `runTransfer` entirely — breaking its
+    // own "never throws for a partial failure" contract — and left the
+    // job stuck at `running` forever, because nothing downstream could
+    // reach failJob or finishJob.
+    return failJob(
+      jobStore,
+      job,
+      report,
+      `Could not create the destination playlist: ${describeError(error)}`,
+    );
+  }
 
   for (let index = 0; index < tracks.length; index += 1) {
     if (await isCancelled(jobStore, job)) break;

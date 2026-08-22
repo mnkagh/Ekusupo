@@ -92,7 +92,12 @@ export function createSpotifyProvider(config: SpotifyProviderConfig = {}): Music
 
     async listPlaylists(session: AuthSession, request?: PageRequest): Promise<Page<Playlist>> {
       const limit = request?.limit ?? DEFAULT_PAGE_LIMIT;
-      const offset = request?.cursor ? Number(request.cursor) : 0;
+
+      // A cursor this connector issued is always a plain number, but one
+      // from elsewhere need not be — `Number("x")` would put a literal
+      // `NaN` in the URL and read nothing. Fall back to the first page.
+      const parsed = Number(request?.cursor);
+      const offset = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 
       const page = await http.request<SpotifyPagedResponse<SpotifyPlaylistObject>>(
         session,
@@ -101,7 +106,11 @@ export function createSpotifyProvider(config: SpotifyProviderConfig = {}): Music
 
       return {
         items: page.items.map(normalizePlaylist),
-        nextCursor: page.next ? String(offset + limit) : undefined,
+        // The *response's* own offset and item count, not the limit that
+        // was asked for: Spotify clamps `limit` to its maximum (50 for
+        // /me/playlists), so advancing by the request's value skips
+        // playlists on every page past the first.
+        nextCursor: page.next ? String(page.offset + page.items.length) : undefined,
       };
     },
 

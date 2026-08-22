@@ -48,7 +48,13 @@ export interface SpotifyTrackObject {
 export interface SpotifyPlaylistTrackItem {
   added_at?: string;
   added_by?: { id?: string };
-  track: SpotifyTrackObject;
+  /**
+   * Null when the entry's audio is gone from Spotify's catalogue — a
+   * removed release, an unavailable local file. Real playlists contain
+   * these; the type says so rather than letting a dereference of `.id`
+   * discover it at runtime.
+   */
+  track: SpotifyTrackObject | null;
 }
 
 /**

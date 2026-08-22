@@ -45,7 +45,33 @@ async function exchangeToken(
     throw mapSpotifyHttpError(response);
   }
 
-  const token = (await response.json()) as SpotifyTokenResponse;
+  // A 200 whose body is not a token (a misbehaving proxy, a captive
+  // portal, an API change) must surface as a connector error. Letting it
+  // through used to reach `new Date(NaN).toISOString()` and throw an
+  // unclassified RangeError from deep inside ISO formatting.
+  let token: SpotifyTokenResponse;
+  try {
+    token = (await response.json()) as SpotifyTokenResponse;
+  } catch {
+    throw new ConnectorError(
+      "provider_unavailable",
+      "Spotify's token endpoint answered successfully, but its body was not a token.",
+      { retryable: false },
+    );
+  }
+  if (
+    typeof token?.access_token !== "string" ||
+    token.access_token.length === 0 ||
+    typeof token?.expires_in !== "number" ||
+    !Number.isFinite(token.expires_in) ||
+    token.expires_in <= 0
+  ) {
+    throw new ConnectorError(
+      "provider_unavailable",
+      "Spotify's token endpoint answered successfully, but without the fields a token needs.",
+      { retryable: false },
+    );
+  }
 
   return {
     method: "oauth2",
@@ -145,10 +171,23 @@ export async function refreshAuthentication(
     throw new ConnectorError("authentication_error", "Session has no refresh token to use.");
   }
 
-  return exchangeToken(
+  const refreshed = await exchangeToken(
     config,
     new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
   );
+
+  // RFC 6749 §6: a refresh response MAY omit `refresh_token`, and
+  // Spotify's does for confidential clients. The token just used remains
+  // valid — carrying it forward is the difference between refreshing
+  // forever and failing on the *next* expiry with "no refresh token".
+  return {
+    ...refreshed,
+    raw: {
+      ...refreshed.raw,
+      refreshToken:
+        typeof refreshed.raw.refreshToken === "string" ? refreshed.raw.refreshToken : refreshToken,
+    },
+  };
 }
 
 /**

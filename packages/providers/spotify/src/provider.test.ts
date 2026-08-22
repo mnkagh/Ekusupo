@@ -150,6 +150,110 @@ describe("createSpotifyProvider", () => {
     expect(playlist?.items[0]?.track.artists[0]?.name).toBe("The Killers");
   });
 
+  it("skips entries whose track is null instead of crashing the whole read", async () => {
+    // Spotify returns `track: null` for entries whose audio has left its
+    // catalogue. Dereferencing it used to throw a TypeError and fail the
+    // entire playlist read.
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes("/playlists/")) {
+        return jsonResponse({
+          id: "playlist-nulls",
+          name: "Has dead entries",
+          public: true,
+          tracks: {
+            total: 3,
+            next: null,
+            items: [
+              {
+                added_at: "2026-01-01T00:00:00.000Z",
+                track: {
+                  id: "alive-1",
+                  name: "Alive",
+                  duration_ms: 1000,
+                  explicit: false,
+                  artists: [{ id: "a", name: "A" }],
+                },
+              },
+              { added_at: "2026-01-02T00:00:00.000Z", track: null },
+              {
+                added_at: "2026-01-03T00:00:00.000Z",
+                track: {
+                  id: "alive-2",
+                  name: "Also alive",
+                  duration_ms: 1000,
+                  explicit: false,
+                  artists: [{ id: "a", name: "A" }],
+                },
+              },
+            ],
+          },
+        });
+      }
+      return jsonResponse({ error: "not found" }, 404);
+    }) as unknown as typeof fetch;
+
+    const provider = createSpotifyProvider({ fetchImpl });
+    const session = { method: "oauth2" as const, raw: { accessToken: "token" } };
+
+    const playlist = await provider.getPlaylist?.(session, "playlist-nulls");
+
+    expect(playlist?.items.map((item) => item.track.id)).toEqual(["alive-1", "alive-2"]);
+  });
+
+  it("advances the playlist-list cursor by what the response actually held", async () => {
+    // Spotify clamps `limit` to 50 on /me/playlists. Advancing by the
+    // requested amount (100) would skip half the playlists on every page
+    // after the first; advancing by the response's offset+count does not.
+    let requested: URL | undefined;
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/api/token") return jsonResponse(tokenFixture);
+      if (url.pathname.endsWith("/me/playlists")) {
+        requested = url;
+        return jsonResponse({
+          items: Array.from({ length: 50 }, (_, index) => ({
+            ...listItemFixture,
+            id: `playlist-${index}`,
+          })),
+          limit: 50,
+          offset: 0,
+          total: 60,
+          next: "https://api.spotify.com/v1/me/playlists?limit=50&offset=50",
+        });
+      }
+      return jsonResponse({ error: "not found" }, 404);
+    }) as unknown as typeof fetch;
+
+    const provider = createSpotifyProvider({ fetchImpl, clientId: "id", clientSecret: "secret" });
+    const session = { method: "oauth2" as const, raw: { accessToken: "token" } };
+
+    const page = await provider.listPlaylists?.(session, { limit: 100 });
+
+    expect(page?.items).toHaveLength(50);
+    expect(page?.nextCursor).toBe("50");
+    expect(requested?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("treats an unparseable cursor as the first page rather than sending NaN", async () => {
+    let requestedOffset: string | undefined;
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = new URL(input.toString());
+      if (url.pathname.endsWith("/me/playlists")) {
+        requestedOffset = url.searchParams.get("offset") ?? undefined;
+        return jsonResponse(listFixture);
+      }
+      return jsonResponse({ error: "not found" }, 404);
+    }) as unknown as typeof fetch;
+
+    const provider = createSpotifyProvider({ fetchImpl });
+    const session = { method: "oauth2" as const, raw: { accessToken: "token" } };
+
+    await provider.listPlaylists?.(session, { cursor: "not-a-number" });
+
+    expect(requestedOffset).toBe("0");
+  });
+
   describe("playlists longer than one page", () => {
     /**
      * Spotify caps `GET /playlists/{id}` at 100 tracks and puts the rest

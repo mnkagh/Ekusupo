@@ -133,4 +133,52 @@ describe("refreshAuthentication", () => {
       refreshAuthentication({ fetchImpl }, { method: "oauth2", raw: {} }),
     ).rejects.toMatchObject({ code: "authentication_error" });
   });
+
+  it("keeps the old refresh token when the response omits one — RFC 6749 §6", async () => {
+    // Spotify omits refresh_token on confidential-client refreshes. The
+    // token just used is still valid; returning a session without one
+    // used to make the *next* refresh fail with "no refresh token".
+    const fetchWithoutRotation = (async () =>
+      jsonResponse({
+        access_token: "new-access-token",
+        token_type: "Bearer",
+        expires_in: 3600,
+      })) as unknown as typeof fetch;
+
+    const refreshed = await refreshAuthentication(
+      { clientId: "id", clientSecret: "secret", fetchImpl: fetchWithoutRotation },
+      { method: "oauth2", raw: { refreshToken: "still-valid-refresh" } },
+    );
+
+    expect(refreshed.raw.accessToken).toBe("new-access-token");
+    expect(refreshed.raw.refreshToken).toBe("still-valid-refresh");
+  });
+
+  it("prefers a rotated refresh token when the response does include one", async () => {
+    const { fetchImpl } = capturingFetch();
+
+    const refreshed = await refreshAuthentication(
+      { clientId: "id", clientSecret: "secret", fetchImpl },
+      { method: "oauth2", raw: { refreshToken: "old-refresh" } },
+    );
+
+    expect(refreshed.raw.refreshToken).toBe("mock-refresh-token");
+  });
+});
+
+describe("token response validation", () => {
+  it("rejects a malformed 200 as a connector error instead of crashing on NaN dates", async () => {
+    // A proxy or captive portal can answer 200 with HTML. `expires_in`
+    // undefined used to reach `new Date(NaN).toISOString()` and throw an
+    // unclassified RangeError.
+    const htmlFetch = (async () =>
+      new Response("<html>please sign in to the wifi</html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })) as unknown as typeof fetch;
+
+    await expect(
+      authenticateAsApp({ clientId: "id", clientSecret: "secret", fetchImpl: htmlFetch }),
+    ).rejects.toMatchObject({ code: "provider_unavailable" });
+  });
 });

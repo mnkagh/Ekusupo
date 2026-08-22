@@ -5,6 +5,7 @@ import type {
   SpotifyArtistObject,
   SpotifyImage,
   SpotifyPlaylistObject,
+  SpotifyPlaylistTrackItem,
   SpotifyTrackObject,
 } from "./types.js";
 
@@ -75,11 +76,21 @@ export function normalizePlaylist(playlist: SpotifyPlaylistObject): Playlist {
     // The list endpoint doesn't populate `tracks.items` (only `total`) —
     // items is legitimately empty there; only the single-playlist fetch
     // populates it. See types.ts.
-    items: (playlist.tracks.items ?? []).map((item) => ({
-      track: normalizeTrack(item.track),
-      addedAt: item.added_at,
-      addedBy: item.added_by?.id,
-    })),
+    //
+    // A null `track` is an entry whose audio has left Spotify's catalogue
+    // entirely (a pulled release, a dead local file). There is nothing to
+    // normalize — and previously, nothing to stop `.id` on null from
+    // crashing the whole playlist read. Skipping the entry costs one item;
+    // dereferencing it cost every item after it.
+    items: (playlist.tracks.items ?? [])
+      .filter((item): item is SpotifyPlaylistTrackItem & { track: SpotifyTrackObject } =>
+        Boolean(item.track),
+      )
+      .map((item) => ({
+        track: normalizeTrack(item.track),
+        addedAt: item.added_at,
+        addedBy: item.added_by?.id,
+      })),
     artwork: normalizeArtwork(playlist.images),
     privacy:
       playlist.public === true ? "public" : playlist.public === false ? "private" : "unknown",

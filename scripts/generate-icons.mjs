@@ -72,11 +72,11 @@ function encodePng(width, height, rgba) {
 
 // --- the mark --------------------------------------------------------
 
-/** The three palette stops, matching apps/web tokens. */
-const TEAL = [52, 224, 208];
-const VIOLET = [139, 108, 245];
-const AMBER = [255, 178, 107];
-const INK = [10, 8, 18];
+/** The signal's three stops, matching apps/web tokens' dark theme. */
+const PINK = [244, 114, 182];
+const WHITE = [245, 245, 244];
+const YELLOW = [250, 204, 21];
+const INK = [5, 5, 5];
 
 function mix(a, b, t) {
   return [
@@ -86,9 +86,9 @@ function mix(a, b, t) {
   ];
 }
 
-/** Samples the teal → violet → amber ramp. */
+/** Samples the pink → white → yellow ramp. */
 function spectrum(t) {
-  return t < 0.5 ? mix(TEAL, VIOLET, t * 2) : mix(VIOLET, AMBER, (t - 0.5) * 2);
+  return t < 0.5 ? mix(PINK, WHITE, t * 2) : mix(WHITE, YELLOW, (t - 0.5) * 2);
 }
 
 /** Distance from a point to a line segment — round caps come for free. */
@@ -102,26 +102,12 @@ function distanceToSegment(px, py, ax, ay, bx, by) {
   return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
 }
 
-/** Approximates a quarter-turn corner as a short run of segments. */
-function arc(cx, cy, radius, fromDegrees, toDegrees, steps = 5) {
-  const segments = [];
-  for (let i = 0; i < steps; i++) {
-    const a1 = ((fromDegrees + ((toDegrees - fromDegrees) * i) / steps) * Math.PI) / 180;
-    const a2 = ((fromDegrees + ((toDegrees - fromDegrees) * (i + 1)) / steps) * Math.PI) / 180;
-    segments.push([
-      cx + radius * Math.cos(a1),
-      cy + radius * Math.sin(a1),
-      cx + radius * Math.cos(a2),
-      cy + radius * Math.sin(a2),
-    ]);
-  }
-  return segments;
-}
-
 /**
  * The Ekusupo mark, on the same 64×64 grid as `apps/web/src/brand/Logo.tsx`
- * — a library holding three equaliser bars, with an arrow leaving through
- * its open top-right corner.
+ * — a folded paper plane. The name that circles it in the full mark is not
+ * drawn here: at favicon sizes a ring of text is noise, not a texture, so
+ * the icon shows the plane at rest exactly as the small rail instance
+ * does (`<Logo orbitLabel={false} />`).
  *
  * Every stroke is a line segment, and a pixel belongs to the mark when it
  * is within half a stroke width of the nearest one. That is the whole
@@ -134,25 +120,14 @@ function arc(cx, cy, radius, fromDegrees, toDegrees, steps = 5) {
  * version of the brand is exactly what this replaced.
  */
 const MARK_SEGMENTS = [
-  // The library: top edge, then anticlockwise, open at the top right.
-  [40, 14, 20, 14],
-  ...arc(20, 20, 6, -90, -180),
-  [14, 20, 14, 44],
-  ...arc(20, 44, 6, 180, 90),
-  [20, 50, 44, 50],
-  ...arc(44, 44, 6, 90, 0),
-  [50, 44, 50, 28],
+  // The fold: nose, long top wing, tail notch, short bottom fin, home.
+  [56, 9, 8, 25],
+  [8, 25, 27, 34],
+  [27, 34, 21, 55],
+  [21, 55, 56, 9],
 
-  // What is inside it: three bars on a common baseline, uneven so they
-  // read as sound rather than as a barcode.
-  [23, 41, 23, 32],
-  [32, 41, 32, 25],
-  [41, 41, 41, 35],
-
-  // Out through the corner: shaft, then the arrowhead's two edges.
-  [43, 21, 57, 7],
-  [46, 7, 57, 7],
-  [57, 7, 57, 18],
+  // The crease down the middle, from the nose to the keel.
+  [56, 9, 27, 34],
 ];
 
 function drawIcon(size, safeArea) {
@@ -163,7 +138,7 @@ function drawIcon(size, safeArea) {
   const scale = (size * safeArea) / 64;
   const offsetX = (size - 64 * scale) / 2;
   const offsetY = (size - 64 * scale) / 2;
-  const halfStroke = (5 / 2) * scale;
+  const halfStroke = (4 / 2) * scale;
 
   // Pre-scale once rather than per pixel.
   const segments = MARK_SEGMENTS.map(([ax, ay, bx, by]) => [

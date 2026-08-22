@@ -1,17 +1,17 @@
 /*
- * Design tokens — "dichroic".
+ * Design tokens — "signal".
  *
- * The palette is refracted light: a spectrum that shifts teal → violet →
- * amber across a surface rather than one flat brand colour. That is the
- * product's own behaviour made visible — a playlist enters the core and
- * leaves transformed — and it avoids both of the obvious clichés:
- * indigo-violet gradients (the generated-UI default) and acid lime on
- * black (the developer-tool default).
+ * Four colours: pink and yellow as the two accents, black and white as
+ * the two ends every screen sits between. No other hue is smuggled in —
+ * every gradient, glow and accent in the app resolves to one of these
+ * four. Pink carries what is moving or has succeeded; yellow carries
+ * what stops or needs attention.
  *
- * Base is ink-violet, not black: pure #000 kills the spectrum's shadow
- * end, and a violet-shifted base makes the teal and amber read as light
- * rather than as paint. Text is bone, not #fff, for the same reason
- * print does it — pure white on near-black vibrates.
+ * The base is true black, not a tinted near-black: this is a utility
+ * that moves your library, not a mood board, and a neutral void reads as
+ * serious rather than decorative. Text is a soft neutral white rather
+ * than pure #fff for the same reason print avoids it — pure white on
+ * true black vibrates at body-text sizes.
  */
 :root {
   /* The default, and what `data-theme="dark"` resolves to. Declared so
@@ -19,29 +19,38 @@
      browser rather than light-on-dark. */
   color-scheme: dark;
 
-  /* Surfaces — violet-shifted ink. */
-  --surface-void: #0a0812;
-  --surface-base: #100c1c;
-  --surface-panel: #171225;
-  --surface-raised: #1f1830;
-  --surface-hover: #29203d;
+  /* Surfaces — true black, no colour cast. */
+  --surface-void: #050505;
+  --surface-base: #0b0b0b;
+  --surface-panel: #121212;
+  --surface-raised: #1a1a1a;
+  --surface-hover: #242424;
 
   /* Hairlines. */
-  --line-faint: #241d38;
-  --line: #322847;
-  --line-strong: #453a5f;
+  --line-faint: #1e1e1e;
+  --line: #2c2c2c;
+  --line-strong: #3d3d3d;
 
-  /* Bone, not white. */
-  --text-primary: #f4efe6;
-  --text-secondary: #a89fb8;
-  --text-muted: #6f6683;
-  --text-inverse: #0a0812;
+  /* Soft neutral white, not pure #fff. */
+  --text-primary: #f5f5f4;
+  --text-secondary: #a8a8a6;
+  --text-muted: #6e6e6c;
+  --text-inverse: #050505;
 
-  /* The spectrum. Three stops, used as a set — never one alone as a
-     "brand colour", because the shift between them is the identity. */
-  --spectrum-1: #34e0d0; /* teal   */
-  --spectrum-2: #8b6cf5; /* violet */
-  --spectrum-3: #ffb26b; /* amber  */
+  /*
+   * The signal. Pink to white to yellow — used as a set, never one alone
+   * as "the brand colour".
+   *
+   * White sits in the middle rather than black on purpose: this gradient
+   * paints text, buttons and strokes on top of a black surface, and a
+   * black midpoint would vanish into it exactly where the gradient
+   * should be brightest. White is what a signal looks like against the
+   * void; the light theme below inverts this so the midpoint stays black
+   * against paper instead.
+   */
+  --spectrum-1: #f472b6; /* pink   */
+  --spectrum-2: #f5f5f4; /* white  */
+  --spectrum-3: #facc15; /* yellow */
 
   --spectrum: linear-gradient(
     100deg,
@@ -51,17 +60,19 @@
   );
   --spectrum-soft: linear-gradient(
     100deg,
-    rgb(52 224 208 / 16%),
-    rgb(139 108 245 / 16%),
-    rgb(255 178 107 / 16%)
+    rgb(244 114 182 / 16%),
+    rgb(245 245 244 / 12%),
+    rgb(250 204 21 / 16%)
   );
 
-  --glow-teal: rgb(52 224 208 / 22%);
-  --glow-violet: rgb(139 108 245 / 26%);
-  --glow-amber: rgb(255 178 107 / 20%);
+  --glow-1: rgb(244 114 182 / 24%); /* pink   */
+  --glow-2: rgb(245 245 244 / 20%); /* white  */
+  --glow-3: rgb(250 204 21 / 22%); /* yellow */
 
-  --danger: #ff7a8a;
-  --danger-faint: rgb(255 122 138 / 10%);
+  /* The attention colour — yellow rather than a red the palette no
+     longer has, so "stop or fix this" reads as one colour everywhere. */
+  --danger: #facc15;
+  --danger-faint: rgb(250 204 21 / 10%);
 
   /*
    * Semantic surfaces for effects that must *invert* between themes
@@ -78,16 +89,18 @@
   --overlay-peak: #ffffff;
   --overlay-peak-glow: rgb(255 255 255 / 35%);
 
-  /* The wordmark's extruded side wall, lit from the front. */
-  --extrude-near: rgb(120 108 150 / 45%);
-  --extrude-far: rgb(76 68 98 / 35%);
-  --extrude-cast: rgb(10 8 18 / 65%);
+  /* The wordmark's extruded side wall, lit from the front. Neutral grey
+     rather than a tinted shadow — the palette has no third hue to tint
+     it with. */
+  --extrude-near: rgb(150 150 150 / 42%);
+  --extrude-far: rgb(95 95 95 / 34%);
+  --extrude-cast: rgb(0 0 0 / 68%);
   /* Keeps display text legible over whatever sits behind it. */
-  --text-halo: rgb(10 8 18 / 85%);
+  --text-halo: rgb(0 0 0 / 85%);
 
   /* Colour only — the drawer sets its own offsets, which differ by side. */
   --shadow-drawer-color: rgb(0 0 0 / 90%);
-  --scrim: rgb(6 4 12 / 74%);
+  --scrim: rgb(0 0 0 / 74%);
 
   /*
    * One family, two optical sizes. Inter Tight for headings and Inter
@@ -136,8 +149,7 @@
 
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 50%), 0 12px 32px -10px rgb(0 0 0 / 70%);
   --shadow-lift:
-    0 2px 4px rgb(0 0 0 / 50%), 0 24px 64px -16px rgb(0 0 0 / 80%),
-    0 0 40px -20px var(--glow-violet);
+    0 2px 4px rgb(0 0 0 / 50%), 0 24px 64px -16px rgb(0 0 0 / 80%), 0 0 40px -20px var(--glow-1);
 }
 
 /*
@@ -149,11 +161,12 @@
  *
  * Two things do not simply invert:
  *
- * - **The spectrum.** Teal #34e0d0 and amber #ffb26b are luminous
- *   against ink and nearly invisible against paper (around 1.6:1 on
- *   white). The light stops are the same three hues taken darker and
- *   slightly less saturated, so the teal→violet→amber shift still reads
- *   as one family while clearing 4.5:1 on the surfaces they sit on.
+ * - **The signal's midpoint.** White sits between green and red on ink
+ *   so the gradient stays visible against a black surface; on paper that
+ *   same white would vanish, so here the midpoint flips to black instead
+ *   — the same "make the middle visible against its own background"
+ *   rule, applied the other way up. Green and red also darken slightly,
+ *   because the dark-theme shades sit under 2:1 contrast on white.
  * - **Elevation.** On ink, "raised" means lighter; on paper it means a
  *   real shadow, because a lighter-than-white surface does not exist.
  *   The raised/hover steps therefore go *down* in luminance here while
@@ -167,24 +180,24 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --surface-void: #f4f2f9;
+  --surface-void: #f5f5f4;
   --surface-base: #ffffff;
-  --surface-panel: #fbfafe;
-  --surface-raised: #f1eef8;
-  --surface-hover: #e7e2f2;
+  --surface-panel: #fafafa;
+  --surface-raised: #f0f0ef;
+  --surface-hover: #e6e6e4;
 
-  --line-faint: #e7e2f0;
-  --line: #d4cce3;
-  --line-strong: #b3a8c9;
+  --line-faint: #e7e7e5;
+  --line: #d3d3d0;
+  --line-strong: #adada9;
 
-  --text-primary: #171122;
-  --text-secondary: #4c4363;
-  --text-muted: #6c6383;
+  --text-primary: #101010;
+  --text-secondary: #4a4a47;
+  --text-muted: #6b6a66;
   --text-inverse: #ffffff;
 
-  --spectrum-1: #0d8e84;
-  --spectrum-2: #6741d9;
-  --spectrum-3: #a8620c;
+  --spectrum-1: #be185d; /* pink   */
+  --spectrum-2: #101010; /* black  */
+  --spectrum-3: #a16207; /* yellow */
 
   --spectrum: linear-gradient(
     100deg,
@@ -194,51 +207,51 @@
   );
   --spectrum-soft: linear-gradient(
     100deg,
-    rgb(13 142 132 / 12%),
-    rgb(103 65 217 / 12%),
-    rgb(168 98 12 / 12%)
+    rgb(190 24 93 / 12%),
+    rgb(16 16 16 / 8%),
+    rgb(161 98 7 / 12%)
   );
 
-  --glow-teal: rgb(13 142 132 / 14%);
-  --glow-violet: rgb(103 65 217 / 16%);
-  --glow-amber: rgb(168 98 12 / 12%);
+  --glow-1: rgb(190 24 93 / 16%);
+  --glow-2: rgb(16 16 16 / 10%);
+  --glow-3: rgb(161 98 7 / 14%);
 
-  --danger: #c02648;
-  --danger-faint: rgb(192 38 72 / 8%);
+  --danger: #a16207;
+  --danger-faint: rgb(161 98 7 / 8%);
 
   /*
    * The inversions. Every one of these is the same *idea* as its dark
    * counterpart expressed the other way up: light added on ink becomes
    * shade laid on paper.
    */
-  --overlay-soft: rgb(23 17 34 / 5%);
-  --overlay-strong: rgb(23 17 34 / 10%);
+  --overlay-soft: rgb(16 16 16 / 5%);
+  --overlay-strong: rgb(16 16 16 / 10%);
   /* A filled button's peak is its darkest point here, not its lightest. */
-  --overlay-peak: #171122;
-  --overlay-peak-glow: rgb(23 17 34 / 28%);
+  --overlay-peak: #101010;
+  --overlay-peak-glow: rgb(16 16 16 / 28%);
 
-  /* The extrusion keeps its violet cast but sits lighter than the
-     letter rather than darker, so the wall still reads as a side face
-     catching light instead of a smear of dirt under the type. */
-  --extrude-near: rgb(150 138 180 / 55%);
-  --extrude-far: rgb(120 108 150 / 40%);
-  --extrude-cast: rgb(23 17 34 / 22%);
+  /* Neutral grey, lighter than the letter rather than darker, so the
+     wall still reads as a side face catching light instead of a smear
+     of dirt under the type. */
+  --extrude-near: rgb(150 150 150 / 55%);
+  --extrude-far: rgb(110 110 110 / 40%);
+  --extrude-cast: rgb(16 16 16 / 22%);
   /* On paper the halo behind display text is paper, not ink. */
   --text-halo: rgb(255 255 255 / 85%);
 
-  --shadow-drawer-color: rgb(23 17 34 / 30%);
+  --shadow-drawer-color: rgb(16 16 16 / 30%);
   /* Still a dark scrim: dimming is how a modal separates itself from the
      page, and inverting it to a white wash on a white page would remove
      the separation entirely. Lighter than the dark theme's, because it
      has less contrast to overcome. */
-  --scrim: rgb(23 17 34 / 45%);
+  --scrim: rgb(16 16 16 / 45%);
 
   /* Ink-coloured and soft, not black and heavy: a hard black shadow on
      paper reads as a sticker rather than as elevation. */
-  --shadow-panel: 0 1px 2px rgb(23 17 34 / 6%), 0 12px 32px -12px rgb(23 17 34 / 14%);
+  --shadow-panel: 0 1px 2px rgb(16 16 16 / 6%), 0 12px 32px -12px rgb(16 16 16 / 14%);
   --shadow-lift:
-    0 2px 4px rgb(23 17 34 / 7%), 0 24px 64px -20px rgb(23 17 34 / 18%),
-    0 0 40px -24px var(--glow-violet);
+    0 2px 4px rgb(16 16 16 / 7%), 0 24px 64px -20px rgb(16 16 16 / 18%),
+    0 0 40px -24px var(--glow-1);
 }
 
 /*

@@ -15,7 +15,7 @@ export interface ProviderDescriptor {
   /** Short, factual capability line. No marketing. */
   capability: string;
   availability: "available" | "planned";
-  /** Two brand-adjacent stops used only for that tile's own accent. */
+  /** Two accent stops used only for that tile's own accent. */
   accent: [string, string];
   /** Drawn as an inline SVG path so no external icon dependency is needed. */
   glyph: "wave" | "play" | "file";
@@ -33,7 +33,7 @@ export const PROVIDER_CATALOG: ProviderDescriptor[] = [
     name: "Spotify",
     capability: "Public playlists work without an account",
     availability: "available",
-    accent: ["#1ed760", "#34e0d0"],
+    accent: ["#f472b6", "#0a0a0a"],
     glyph: "wave",
   },
   {
@@ -41,7 +41,7 @@ export const PROVIDER_CATALOG: ProviderDescriptor[] = [
     name: "YouTube Music",
     capability: "Read playlists from your YouTube account",
     availability: "available",
-    accent: ["#ff0033", "#ffb26b"],
+    accent: ["#facc15", "#0a0a0a"],
     glyph: "play",
   },
 ];

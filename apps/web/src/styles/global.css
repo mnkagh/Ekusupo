@@ -71,9 +71,13 @@ input {
   border-radius: var(--radius-sm);
 }
 
+/* Green background, not the signal's midpoint — the midpoint is white on
+   dark and black on light, either of which would sit behind text of the
+   same colour and erase it. Green contrasts with `--text-inverse` in
+   both themes. */
 ::selection {
-  background: var(--spectrum-2);
-  color: var(--text-primary);
+  background: var(--spectrum-1);
+  color: var(--text-inverse);
 }
 
 /* ----------------------------------------------------------- backdrop */
@@ -114,8 +118,9 @@ input {
 }
 
 /*
- * The mark, at watermark scale. Sized in viewport units so it fills the
- * shorter axis on any shape of screen rather than being cropped on one.
+ * The mark, at watermark scale: headphones, the name across the middle.
+ * Sized in viewport units so it fills the shorter axis on any shape of
+ * screen rather than being cropped on one.
  */
 .backdrop__mark {
   display: grid;
@@ -131,188 +136,114 @@ input {
  * `transform`, and setting both here would mean one silently winning.
  * These are separate properties, so they compose instead of fighting.
  */
-/* Enough to clear a drawer, not so much that the mark walks off the
-   side of a narrow window. */
 /*
- * The same distance the shell travels, and only at the same widths — so
- * the mark and the page move together as one surface. Below 40rem the
- * drawer becomes a bottom sheet and the shell does not shift at all, so
- * neither does this.
+ * The mark stays centred on every screen, drawers included. It used to
+ * slide aside to make room for an open drawer, which read as the brand
+ * chasing around the page; a centred watermark is calmer and the scrim
+ * already separates drawer from page.
  */
-@media (min-width: 40rem) {
-  .backdrop--shift-left .backdrop__mark {
-    translate: calc(-1 * var(--drawer-shift)) 0;
-  }
 
-  .backdrop--shift-right .backdrop__mark {
-    translate: var(--drawer-shift) 0;
-  }
+.backdrop-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
 }
 
-.backdrop__mark svg {
+.backdrop-mark__phones {
   /*
-   * Sized off the *shorter* viewport axis and capped well inside it.
-   * At 62vmin the mark was wider than a narrow window, so the container
-   * clipped it left and right — and once it drifted or slid out from
-   * under a drawer, the cut on one side became obvious. Everything that
-   * moves it is a percentage of this width, so keeping it comfortably
-   * smaller than the viewport is what keeps the whole mark on screen
-   * through the full range of motion.
+   * Sized off the *shorter* viewport axis and capped well inside it, so
+   * the whole drawing survives every shape of window without clipping.
    */
-  width: clamp(13rem, 44vmin, 32rem);
+  width: clamp(15rem, 48vmin, 34rem);
   height: auto;
-
-  /*
-   * An SVG clips to its viewBox by default. The arrow's orbit takes it
-   * well outside a 64×64 box — its far corner sits about 35 units from
-   * the centre, and the mid-flight push widens that further — so half of
-   * every lap was being cut off at the edge, and the mark looked sliced.
-   * Letting it paint outside is what the orbit needs; the backdrop
-   * around it still clips at the viewport.
-   */
   overflow: visible;
 
-  /* The glow. `drop-shadow` follows the alpha of the shape, so the light
-     takes the form of the strokes — a `box-shadow` would halo the square
-     bounding box instead. Three passes: a tight bright core, a mid
-     spread, and a wide soft bloom. */
-  /* Neutral light rather than coloured, and tight to the strokes. A
-     wide soft bloom out here rendered as its own faint disc behind the
-     wordmark — another circle competing with the halo. */
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text-primary) 40%, transparent))
-    drop-shadow(0 0 18px color-mix(in srgb, var(--text-primary) 18%, transparent));
+  /* The glow. `drop-shadow` follows the alpha of the shape, so the
+     light takes the form of the strokes. Tight to the strokes: a wide
+     bloom rendered as its own faint disc behind the word. */
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text-primary) 35%, transparent))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--text-primary) 16%, transparent));
   animation: backdrop-pulse 9s var(--ease-in-out) infinite;
 }
-
 /*
- * The export arrow leaves, circles the mark, and lands back exactly
- * where it started — the transfer, on a loop.
+ * The name on the band. SVG text, so the styling is font metrics in
+ * viewbox units: 6px against a 64-unit grid, wide-tracked so the word
+ * reads as coiled rather than cramped.
  *
- * `transform-box: view-box` with the origin at the centre of the 64×64
- * grid is what makes it orbit the mark rather than spin on its own tip:
- * without it, SVG would rotate the group about the user-space origin at
- * the top-left corner and the arrow would swing off-screen.
- *
- * It ends on a full 360°, so the last frame is identical to the first
- * and the loop has no seam. The pauses at either end are what make it
- * read as a departure and an arrival rather than as constant spinning.
+ * Two animations: a one-shot fade as the page settles, and an endless
+ * soft glow pulse (filter, not text-shadow — SVG text has no box for
+ * a shadow to hang from). The crawl itself is SMIL inside the SVG;
+ * none of the motion here moves position.
  */
-/* The flight path: around the mark's centre, once, then a rest. */
-.backdrop__mark .logo__arrow-orbit {
-  transform-box: view-box;
-  transform-origin: 32px 32px;
-  animation: arrow-orbit 7s cubic-bezier(0.55, -0.28, 0.35, 1.28) infinite;
-}
-
-/*
- * The attitude, about the arrow's own centre rather than the mark's.
- *
- * At rest it sits where the logo draws it, nose pointing out of the
- * corner. As it launches it banks a quarter turn so the nose leads along
- * the circle — an aircraft turning into its heading — holds that the
- * whole way round, and rolls back out as it settles into its slot.
- *
- * The flash rides here too, so the light is on the aircraft rather than
- * on the orbit it happens to be travelling.
- */
-.backdrop__mark .logo__arrow {
-  transform-box: fill-box;
-  transform-origin: center;
+.backdrop-mark__word {
+  font-family: var(--font-display);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   animation:
-    arrow-bank 7s var(--ease-in-out) infinite,
-    arrow-flash 7s var(--ease-in-out) infinite;
+    word-arrive 900ms var(--ease-out) both,
+    word-glow 4.2s ease-in-out infinite 1100ms;
 }
 
-@keyframes arrow-orbit {
-  0%,
-  14% {
-    transform: rotate(0deg) translateX(0);
+@keyframes word-arrive {
+  from {
+    opacity: 0;
   }
-  /* Pushed wide at speed, the way anything banking hard drifts out. */
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes word-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--spectrum-2) 30%, transparent));
+  }
   50% {
-    transform: rotate(184deg) translateX(9px);
-  }
-  88%,
-  100% {
-    transform: rotate(360deg) translateX(0);
-  }
-}
-
-@keyframes arrow-bank {
-  0%,
-  10% {
-    transform: rotate(0deg) scale(1);
-  }
-  /* Squashes into the turn as it commits to the heading. */
-  22% {
-    transform: rotate(-90deg) scale(0.9);
-  }
-  /* Stretched out along the cruise. */
-  55% {
-    transform: rotate(-90deg) scale(1.12);
-  }
-  /* Rolls back out and drops into the slot. */
-  86%,
-  100% {
-    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--spectrum-2) 65%, transparent))
+      drop-shadow(0 0 11px var(--glow-1));
   }
 }
 
 /*
- * Neutral, like the rest of the backdrop mark — the spectrum belongs to
- * the wordmark on the landing, not to the watermark behind it. The
- * flash still has to out-shine the mark's resting glow, which is what
- * the radii here are doing.
+ * Reduced motion: the word rests at the crown of the band (the
+ * component sets its startOffset), fully lit, no crawl and no pulse —
+ * its span-level animations are gone along with the spans themselves.
  */
-@keyframes arrow-flash {
-  0%,
-  8% {
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--text-primary) 40%, transparent));
-  }
-  /* Charges, then goes. */
-  16% {
-    filter: drop-shadow(0 0 26px var(--text-primary))
-      drop-shadow(0 0 54px color-mix(in srgb, var(--text-primary) 45%, transparent));
-  }
-  50% {
-    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--text-primary) 60%, transparent));
-  }
-  /* Lands. */
-  88% {
-    filter: drop-shadow(0 0 30px var(--text-primary))
-      drop-shadow(0 0 62px color-mix(in srgb, var(--text-primary) 45%, transparent));
-  }
-  100% {
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--text-primary) 40%, transparent));
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-mark__word {
+    animation: none;
+    opacity: 1;
   }
 }
 
+.logo__trail {
+  display: none;
+}
+
+.logo__orbit-text {
+  font-family: var(--font-display);
+  font-size: 6.5px;
+  font-weight: 600;
+  /* Tight: a word sitting in formation, not letters strolling. */
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /*
- * On the landing the mark is the subject, so it is drawn at nearly full
- * strength — it was at 0.3, which is what made it look washed out no
- * matter how much glow was added behind it. Signed in it drops right
- * back, because there the panels are the subject and the mark is
- * wallpaper.
+ * On the landing the *phones* are the quiet part of the composition —
+ * the word over them is the subject and is never dimmed. Signed in, the
+ * whole mark drops back to wallpaper.
  */
-.backdrop--calm .backdrop__mark {
-  opacity: 0.92;
+.backdrop--calm .backdrop-mark__phones {
+  opacity: 0.75;
 }
 
 .backdrop--dense .backdrop__mark {
   opacity: 0.13;
-}
-
-/*
- * Neon: a white-hot core with the spectrum as the light around it,
- * rather than spectrum-coloured strokes that read as grey once dimmed.
- * `--text-primary` rather than literal white so the light theme gets ink
- * on paper instead of an invisible white mark.
- *
- * Landing only. In the workspace the mark stays on its own gradient,
- * where at 13% opacity a white one would read as smudged fog.
- */
-.backdrop--calm .backdrop__mark svg g {
-  stroke: var(--text-primary);
 }
 
 /*
@@ -366,69 +297,88 @@ input {
 }
 
 /* Breathing brightness rather than opacity on the whole mark, so the
-   glow swells while the shape itself stays put. */
+   glow swells while the shape itself stays put. The one-shot click
+   response (`.backdrop__mark--ping` below) replaces this looping pulse
+   for its duration rather than stacking with it — two animations on
+   `filter` would mean one silently overriding the other for as long as
+   both ran. */
+
 /*
- * A click anywhere on the landing surges the mark, then it decays back
- * to its resting breath. Replaces the looping pulse for the duration
- * rather than stacking with it — two animations on `filter` would mean
- * one silently overriding the other for as long as both ran.
+ * A click on the landing answers with a **signal ping**: two thin
+ * concentric rings travel out from the mark and fade while its glow
+ * lifts for a moment and settles. The shape of a beacon answering, not
+ * of an alarm going off — it replaces a lightning flicker that read as
+ * the latter. Runs once per click rather than looping: a permanently
+ * animating backdrop reads as a loading state.
+ *
+ * The rings are pseudo-elements on `.backdrop__mark`, which needs
+ * `position: relative` to anchor them; they scale well past the mark's
+ * own box and are clipped by the backdrop at the viewport edge, so no
+ * scrollable overflow is created.
  */
-/* `linear`, so the keyframe timings above *are* the shape of the strike
-   — an easing curve would smooth the flicker straight back out. */
-.backdrop__mark--flash svg {
-  animation: backdrop-flash 1600ms linear;
+.backdrop__mark {
+  position: relative;
+}
+
+.backdrop__mark--ping svg {
+  animation: ping-glow 900ms var(--ease-out);
+}
+
+.backdrop__mark--ping::before,
+.backdrop__mark--ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--spectrum-2) 55%, transparent);
+  opacity: 0;
+  transform: scale(0.55);
+  pointer-events: none;
+}
+
+/* The second ring carries the pink stop, so the pair reads as the
+   signal travelling rather than one circle duplicated. */
+.backdrop__mark--ping::after {
+  border-color: color-mix(in srgb, var(--spectrum-1) 45%, transparent);
+  animation-delay: 160ms;
+}
+
+.backdrop__mark--ping::before,
+.backdrop__mark--ping::after {
+  animation-name: ping-ring;
+  animation-duration: 1100ms;
+  animation-timing-function: var(--ease-out);
+  /* `both` keeps the delayed second ring invisible until its turn
+     comes, so the stagger reads as intent rather than as a flicker. */
+  animation-fill-mode: both;
+}
+
+@keyframes ping-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
 }
 
 /*
- * `brightness` and `saturate` alongside the shadows, because a
- * drop-shadow only adds light *around* a shape — it cannot make the
- * shape itself brighter, which is why an earlier version of this barely
- * registered. Lifting the strokes and flaring the halo together is what
- * reads as the mark lighting up rather than as a glow switching on
- * behind it.
+ * A brief swell of the existing glow — same drop-shadow shape as the
+ * resting pulse's peak, held a moment, then back. Brightness alone is
+ * not used: the strokes already sit near white on ink, and brightening
+ * white produces nothing.
  */
-/*
- * Lightning, not a fade-up.
- *
- * The shape of a real strike is what sells it: no ramp at all on the way
- * in, a stutter as it re-strikes, then a long decay. Hence the repeated
- * keyframes a couple of percent apart — those are the flicker, and
- * spacing them evenly would turn the whole thing back into a throb.
- *
- * Carried by the *radius* of the glow rather than `brightness`, because
- * the strokes are already near-white at rest and brightening white
- * produces nothing.
- */
-@keyframes backdrop-flash {
-  0% {
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
-      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
-  }
-  /* The strike — instant, no approach. */
-  2% {
-    filter: drop-shadow(0 0 34px var(--text-primary))
-      drop-shadow(0 0 130px color-mix(in srgb, var(--text-primary) 70%, transparent))
-      drop-shadow(0 0 260px color-mix(in srgb, var(--text-primary) 35%, transparent));
-  }
-  /* Falls away... */
-  9% {
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--text-primary) 50%, transparent))
-      drop-shadow(0 0 40px color-mix(in srgb, var(--text-primary) 25%, transparent));
-  }
-  /* ...and re-strikes, the way lightning does. */
-  13% {
-    filter: drop-shadow(0 0 28px var(--text-primary))
-      drop-shadow(0 0 110px color-mix(in srgb, var(--text-primary) 60%, transparent))
-      drop-shadow(0 0 220px color-mix(in srgb, var(--text-primary) 30%, transparent));
-  }
-  22% {
-    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--text-primary) 55%, transparent))
-      drop-shadow(0 0 64px color-mix(in srgb, var(--text-primary) 28%, transparent));
-  }
-  /* The long tail back to rest. */
+@keyframes ping-glow {
+  0%,
   100% {
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 45%, transparent))
-      drop-shadow(0 0 34px color-mix(in srgb, var(--text-primary) 22%, transparent));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text-primary) 40%, transparent))
+      drop-shadow(0 0 18px color-mix(in srgb, var(--text-primary) 18%, transparent));
+  }
+  35% {
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--text-primary) 55%, transparent))
+      drop-shadow(0 0 34px color-mix(in srgb, var(--spectrum-1) 26%, transparent));
   }
 }
 
@@ -483,7 +433,7 @@ input {
   /* A faint spectrum wash so the solid field isn't dead flat. */
   background-image: radial-gradient(
     ellipse 60% 90% at 50% 100%,
-    rgb(139 108 245 / 12%),
+    rgb(250 204 21 / 10%),
     transparent 70%
   );
 }
@@ -492,12 +442,12 @@ input {
   bottom: 0;
   background-image: radial-gradient(
     ellipse 60% 90% at 50% 0%,
-    rgb(52 224 208 / 10%),
+    rgb(244 114 182 / 10%),
     transparent 70%
   );
 }
 
-/* A dichroic line on the parting seam, which brightens as it opens. */
+/* A signal-coloured line on the parting seam, which brightens as it opens. */
 .intro__seam {
   position: absolute;
   left: 0;
@@ -613,7 +563,7 @@ input {
   }
 }
 
-/* The dichroic highlight travelling the word. */
+/* The signal highlight travelling the word. */
 @keyframes sweep-spectrum {
   from {
     background-position: 0% 50%;
@@ -751,7 +701,7 @@ input {
    tight radius only, or the glow swamps the shape it is lighting. */
 .wordmark__logo {
   display: block;
-  filter: drop-shadow(0 0 6px var(--glow-violet)) drop-shadow(0 0 14px var(--glow-teal));
+  filter: drop-shadow(0 0 6px var(--glow-3)) drop-shadow(0 0 14px var(--glow-1));
 }
 
 /*
@@ -761,17 +711,11 @@ input {
  */
 .wordmark__text {
   font-family: var(--font-display);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: var(--track-tight);
   margin: 0;
-
-  color: transparent;
-  background: var(--spectrum);
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: sweep-spectrum 12s linear infinite;
+  color: var(--text-primary);
 }
 
 @keyframes pulse {
@@ -801,10 +745,10 @@ input {
 }
 
 .session__identity {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  letter-spacing: 0;
+  letter-spacing: var(--track-normal);
   word-break: break-all;
 }
 
@@ -876,8 +820,6 @@ input {
   background: transparent;
   border: 1px solid var(--line-faint);
   border-radius: var(--radius-lg);
-  transform-style: preserve-3d;
-  will-change: transform;
   transition:
     border-color var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out);
@@ -887,8 +829,9 @@ input {
   border-color: var(--line);
 }
 
-/* A dichroic hairline along the top edge — the one place the full
-   spectrum appears as itself. */
+/* A signal-coloured hairline along the top edge — the one place the full
+   spectrum appears as itself, held at a fixed low strength so it reads
+   as a finish rather than a hover trick. */
 .panel::after {
   content: "";
   position: absolute;
@@ -896,34 +839,8 @@ input {
   height: 1px;
   border-radius: inherit;
   background: var(--spectrum);
-  opacity: 0.55;
-  transition: opacity var(--dur) var(--ease-out);
-}
-
-.panel:hover::after {
-  opacity: 1;
-}
-
-/* Specular sheen tracking the cursor, fed by useTilt's custom properties
-   so light and tilt share one origin. */
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle 420px at var(--tilt-x, 50%) var(--tilt-y, 50%),
-    rgb(139 108 245 / 12%),
-    rgb(52 224 208 / 5%) 40%,
-    transparent 65%
-  );
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease-out);
+  opacity: 0.35;
   pointer-events: none;
-}
-
-.panel:hover::before {
-  opacity: 1;
 }
 
 .panel__header {
@@ -948,11 +865,11 @@ input {
 }
 
 .field__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--track-wide);
-  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-normal);
+  color: var(--text-secondary);
   transition: color var(--dur-fast) var(--ease-out);
 }
 
@@ -1023,7 +940,7 @@ input[type="file"].field__input::file-selector-button:hover {
   outline: none;
   border-color: var(--spectrum-1);
   background: var(--surface-base);
-  box-shadow: 0 0 0 3px rgb(52 224 208 / 12%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spectrum-1) 14%, transparent);
 }
 
 /* ------------------------------------------------------------ buttons */
@@ -1034,9 +951,9 @@ input[type="file"].field__input::file-selector-button:hover {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -1046,7 +963,6 @@ input[type="file"].field__input::file-selector-button:hover {
   text-decoration: none;
   white-space: nowrap;
   transition:
-    transform var(--dur-fast) var(--ease-spring),
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
@@ -1054,7 +970,7 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .btn:active {
-  transform: translateY(1px) scale(0.985);
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -1079,7 +995,7 @@ input[type="file"].field__input::file-selector-button:hover {
    gradient itself is the interaction. */
 .btn--primary:hover:not(:disabled) {
   background-position: 100% 50%;
-  box-shadow: 0 0 36px -10px var(--glow-violet);
+  box-shadow: 0 0 36px -10px var(--glow-1);
 }
 
 .btn--primary::after {
@@ -1127,61 +1043,10 @@ input[type="file"].field__input::file-selector-button:hover {
   border-color: transparent;
   color: var(--text-inverse);
   font-weight: 600;
-  padding-inline: var(--space-6);
 }
 
 .btn--connect:hover:not(:disabled) {
   background: var(--overlay-peak);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px -10px var(--overlay-peak-glow);
-}
-
-/*
- * A scan line crossing the button on hover — the connect action is the
- * one thing on this screen that actually establishes a link, so it gets
- * the most deliberate motion. Runs once per hover rather than looping:
- * a permanently animating control reads as a loading state.
- */
-.btn--connect::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--spectrum-1) 55%, transparent) 50%,
-    transparent 100%
-  );
-  transform: translateX(-100%);
-  transition: transform var(--dur-slow) var(--ease-out);
-  pointer-events: none;
-}
-
-.btn--connect:hover:not(:disabled)::before {
-  transform: translateX(100%);
-}
-
-/* An arrow that emerges on approach, so the control states its
-   direction rather than only its label. */
-.btn--connect::after {
-  content: "→";
-  display: inline-block;
-  width: 0;
-  opacity: 0;
-  margin-left: 0;
-  transform: translateX(-4px);
-  transition:
-    opacity var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-spring),
-    width var(--dur) var(--ease-out),
-    margin-left var(--dur) var(--ease-out);
-}
-
-.btn--connect:hover:not(:disabled)::after {
-  opacity: 1;
-  width: 1ch;
-  margin-left: var(--space-2);
-  transform: translateX(0);
 }
 
 /* Disconnecting: the tile visibly unlinks rather than just greying out —
@@ -1289,7 +1154,7 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .notice--ok {
-  border-color: rgb(52 224 208 / 30%);
+  border-color: color-mix(in srgb, var(--spectrum-1) 32%, transparent);
 }
 
 .notice--ok::before {
@@ -1297,7 +1162,7 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .notice--error {
-  border-color: rgb(255 122 138 / 32%);
+  border-color: color-mix(in srgb, var(--danger) 32%, transparent);
   background: var(--danger-faint);
   color: var(--danger);
 }
@@ -1323,10 +1188,9 @@ input[type="file"].field__input::file-selector-button:hover {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--track-wide);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-normal);
   color: var(--text-muted);
 }
 
@@ -1779,7 +1643,7 @@ input[type="file"].field__input::file-selector-button:hover {
   }
 }
 
-/* The dichroic seam where the panel meets the page. */
+/* The signal-coloured seam where the panel meets the page. */
 .drawer__rail {
   position: absolute;
   inset: 0 auto 0 0;
@@ -1820,7 +1684,6 @@ input[type="file"].field__input::file-selector-button:hover {
 .icon-btn:hover {
   color: var(--text-primary);
   border-color: var(--line-strong);
-  transform: rotate(90deg);
 }
 
 /* -------------------------------------------------------- tile grid */
@@ -1853,10 +1716,7 @@ input[type="file"].field__input::file-selector-button:hover {
 .counter__value {
   font-size: var(--text-lg);
   font-weight: 600;
-  background: var(--spectrum);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text-primary);
 }
 
 .counter__label {
@@ -1902,19 +1762,20 @@ input[type="file"].field__input::file-selector-button:hover {
 /*
  * Not a card. Each provider is an entry in one continuous list,
  * separated by a hairline rather than boxed in its own panel — the
- * column reads as a single index, which is what stacked cards inside an
- * already-bordered panel stop it from doing.
+ * column reads as a single index. Left-aligned like any other index
+ * row: a centred stack of logo-over-name-over-text reads as decoration,
+ * and pushes the action furthest from where the eye starts.
  */
 .tile {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-4);
-  padding: var(--space-7) var(--space-6);
-  /* Transparent, so the orbiting ring shows through the list rather
-     than being blocked by a slab behind it. */
+  align-items: flex-start;
+  text-align: left;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  /* Transparent, so the list reads as one surface rather than slabs
+     behind it. */
   background: transparent;
   border-bottom: 1px solid var(--line-faint);
   animation: rise var(--dur-slow) var(--ease-out) both;
@@ -1969,12 +1830,12 @@ input[type="file"].field__input::file-selector-button:hover {
   transform: scale(1.06);
 }
 
-/* Display-scale: the provider name is the row's headline, not a label. */
+/* The provider name is the row's headline — sized like one, not like a
+   display poster. */
 .tile__name {
   font-family: var(--font-display);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 600;
-  font-weight: 400;
   line-height: 1.05;
   letter-spacing: var(--track-tight);
   margin: 0;
@@ -1999,10 +1860,9 @@ input[type="file"].field__input::file-selector-button:hover {
 /* The status chip sits with the action on a row; below that width it
    would push the button onto its own line for no gain. */
 .tile__pending {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--track-wide);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-normal);
   color: var(--text-muted);
   padding: var(--space-3) 0;
 }
@@ -2023,8 +1883,8 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .provider-glyph {
-  width: clamp(112px, 16vw, 176px);
-  height: clamp(112px, 16vw, 176px);
+  width: 44px;
+  height: 44px;
   overflow: visible;
 }
 
@@ -2807,17 +2667,20 @@ input[type="file"].field__input::file-selector-button:hover {
 }
 
 .review__risk--high {
-  background: rgb(255 138 128 / 14%);
-  color: #ff8a80;
+  background: var(--danger-faint);
+  color: var(--danger);
 }
 
+/* Neither green nor red: a medium-confidence match is not "good" or
+   "bad", and borrowing either colour would say so by accident. Plain
+   ink instead — the word "Medium" already carries the meaning. */
 .review__risk--medium {
-  background: rgb(255 209 102 / 14%);
-  color: #ffd166;
+  background: var(--overlay-strong);
+  color: var(--text-primary);
 }
 
 .review__risk--low {
-  background: rgb(52 224 208 / 12%);
+  background: color-mix(in srgb, var(--spectrum-1) 14%, transparent);
   color: var(--spectrum-1);
 }
 
@@ -2905,8 +2768,9 @@ input[type="file"].field__input::file-selector-button:hover {
     animation: none;
   }
 
-  /* The arrow's trip stays — it is a transform on a small group, which
-     is cheap — but the mark's own bloom does not. */
+  /* The rail icon has no ring to animate — only the backdrop's does —
+     so there is nothing left to keep here but the bloom, and that is
+     what phones can't afford. */
   .wordmark__logo {
     filter: none;
   }

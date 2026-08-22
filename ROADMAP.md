@@ -57,51 +57,42 @@ becomes the primary dashboard (CLAUDE.md §8).
   search (ADR-0018, superseding ADR-0016's original conclusion). Spotify
   → `@ekusupo/provider-upf-file` proven for real, tracks landing in an
   actual UPF file on disk (`tests/integration/`), not just fakes.
-- ⬜ Cross-provider Live Transfer, **match-based case** (streaming ↔
-  streaming) — still needs a second real **catalog** provider, blocked on
-  the same external-credential problem as Spotify's own OAuth (ADR-0012,
+- ⬜ Cross-provider Live Transfer, **match-based case** (streaming ↔ streaming)
+  — still needs a second real **catalog** provider, blocked on the same
+  external-credential problem as Spotify's own OAuth (ADR-0012,
   ADR-0014).
-- 🔶 Web Dashboard MVP (CLAUDE.md §8.2 screens). Progress so far:
+- ✅ Web Dashboard MVP (CLAUDE.md §8.2 screens). Every screen exists and
+  calls the real API:
   - ✅ Tech stack decided (ADR-0017) and scaffolding done (ADR-0021):
     `apps/web`/`services/api` install, build, and run for real.
   - ✅ Auth v1 (ADR-0022) — real sign-up/sign-in/sign-out/me on
     `services/api`, session cookies, `node:crypto` password hashing,
     verified end-to-end against an actual running server (`curl`, not
-    just `.inject()`). In-memory stores for now — no live Postgres exists
-    in this environment to build a real one against yet.
-  - ✅ Sign-in/sign-up UI (ADR-0023) — `apps/web` now has a real form
-    calling `services/api`, verified with an actual running Vite dev
-    server and a real cross-origin `curl` request carrying the browser's
-    actual dev origin (not just `.inject()`, which bypasses CORS
-    entirely).
-  - ✅ Real Postgres via `pglite` (ADR-0024) — `UserStore`/`SessionStore`
-    now backed by a genuine embedded Postgres with on-disk persistence,
-    verified by killing and restarting the server against the same data
-    directory. No Docker/hosted Postgres exists in this environment, so a
-    hosted-driver path remains intentionally unimplemented (documented,
-    not silently skipped).
-  - ✅ Provider connections on `services/api` (ADR-0025) — real OAuth
-    Authorization Code flow for Spotify, AES-256-GCM encrypted token
-    storage in Postgres, CSRF-protected callback, verified with a real
-    booted server (actual `302` redirect to `accounts.spotify.com`).
-    Needs the user's own Spotify Developer Client ID/Secret to complete a
-    live connection — architecture is complete and tested up to that
-    boundary, same class of external-credential gap as PR7's OAuth.
-  - ✅ Connected Providers screen on `apps/web` (ADR-0026) — real
-    connect/disconnect UI wired to the routes above, verified with a real
-    `vite build`.
-  - ✅ Dry Run transfers on `services/api` (ADR-0027) — the Transfer
-    Engine now runs server-side, with jobs and reports persisted to
-    Postgres and every query scoped to the owning user. Verified against
-    a real booted server over HTTP: sign-up → connect → Dry Run →
-    history, cross-user reads returning 404, tokens confirmed encrypted
-    at rest by searching the on-disk database for the plaintext, and all
-    of it surviving a kill/restart. Spotify is read-only (no
-    `tracks.search`), so a run using it as both source and destination
-    correctly reports `partial` with every track skipped.
-  - ⬜ Transfer setup, transfer progress/report, transfer history, UPF
-    import/export, account settings — the remaining CLAUDE.md §8.2
-    screens. The transfer API exists; no `apps/web` UI calls it yet.
+    just `.inject()`).
+  - ✅ Sign-in/sign-up UI (ADR-0023) — verified over a real cross-origin
+    request carrying the browser's actual dev origin.
+  - ✅ Real Postgres via `pglite` (ADR-0024) — on-disk persistence,
+    survives kill/restart.
+  - ✅ Provider connections (ADR-0025/0026) — OAuth Authorization Code
+    for Spotify and YouTube Music, AES-256-GCM encrypted token storage,
+    CSRF-protected callback, connect/disconnect UI, plus per-user
+    bring-your-own-app credentials so neither provider depends only on
+    operator-configured keys.
+  - ✅ Dry Run transfers on `services/api` (ADR-0027) — jobs and reports
+    persisted to Postgres, every query scoped to the owning user,
+    tokens confirmed encrypted at rest.
+  - ✅ Transfer setup, progress, report, history (ADR-0033) — transfers
+    run in the background behind a `202`, the dashboard polls live
+    progress with cancel, and finished runs are listed, downloadable,
+    and deletable.
+  - ✅ UPF export/import (ADR-0032) — any transfer can target a
+    downloadable UPF file; uploaded documents are validated by path and
+    imported through the same engine. Pasted tracklists take the same
+    road.
+  - ✅ Account settings (CLAUDE.md §21.2) — password change, data
+    export, and full account deletion with cascades.
+  - ✅ Installable PWA (ADR-0030) and a Firefox extension build
+    (ADR-0031).
 
 ## Later (post-MVP)
 

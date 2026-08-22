@@ -37,6 +37,13 @@ interface TileProps {
   disconnecting: boolean;
   onDisconnect: (provider: string) => void;
   onCredentialsChanged: () => void;
+  /**
+   * Whether optional bring-your-own-app forms are revealed. End users
+   * never see them: when the deployment's own credentials power this
+   * provider, connecting is just a click and its keys are none of
+   * anyone else's business.
+   */
+  revealCredentials: boolean;
   index: number;
 }
 
@@ -57,6 +64,7 @@ function ProviderTile({
   disconnecting,
   onDisconnect,
   onCredentialsChanged,
+  revealCredentials,
   index,
 }: TileProps) {
   const tiltRef = useTilt<HTMLLIElement>({ max: 7, lift: 8 });
@@ -64,6 +72,16 @@ function ProviderTile({
   // "Can this actually be connected" is the server's answer, not ours —
   // it depends on which credentials the operator configured.
   const connectable = catalogEntry?.configured ?? false;
+
+  /*
+   * The credentials form is shown only when it earns its place: there is
+   * no server app to fall back on (it's the only way to enable this
+   * provider), or the user has stored their own and needs to manage it —
+   * or they explicitly asked for the advanced view. A deployment with
+   * its own keys renders a tile with nothing but Connect.
+   */
+  const showCredentialsForm =
+    Boolean(catalogEntry) && (!connectable || Boolean(credentialSummary) || revealCredentials);
 
   return (
     <li
@@ -120,11 +138,10 @@ function ProviderTile({
         )}
       </div>
 
-      {/* Every provider in the registry, including Apple Music — it
-          takes a signed developer token rather than a client id and
-          secret, but that is still something a user can paste, and
-          leaving it out meant a tile with no way to enable it at all. */}
-      {catalogEntry && (
+      {/* Only when it earns its place — see showCredentialsForm above.
+          Where the deployment's own keys connect this provider, the tile
+          is just a name and a Connect button. */}
+      {showCredentialsForm && catalogEntry && (
         <ProviderCredentialsForm
           providerId={descriptor.id}
           displayName={descriptor.name}
@@ -149,6 +166,12 @@ function ProviderTile({
 export function ProvidersScreen() {
   const [state, setState] = useState<ListState>({ status: "loading" });
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  /**
+   * Off for everyone by default. The deployment's own credentials are
+   * how providers connect; bringing your own app is an operator-grade
+   * escape hatch (rate limits of your own), not a step in the flow.
+   */
+  const [advanced, setAdvanced] = useState(false);
 
   const reload = () => {
     // Three in one pass: the catalog says what is connectable, the
@@ -170,16 +193,26 @@ export function ProvidersScreen() {
 
   const handleDisconnect = (provider: string) => {
     setDisconnecting(provider);
-    void providersClient.disconnectProvider(provider).then(() => {
-      setDisconnecting(null);
-      reload();
-    });
+    void providersClient
+      .disconnectProvider(provider)
+      .catch(() => undefined)
+      // Reload whether or not the disconnect landed: a failed one shows
+      // the truth (still connected) instead of a button stuck at
+      // "Disconnecting…" forever.
+      .then(() => {
+        setDisconnecting(null);
+        reload();
+      });
   };
 
   const connections = state.status === "loaded" ? state.providers : [];
   const catalog = state.status === "loaded" ? state.catalog : [];
   const credentials = state.status === "loaded" ? state.credentials : [];
   const liveCount = connections.length;
+  /** Whether any provider is connectable purely on the deployment's keys — the only case where the advanced reveal has something to show. */
+  const hasServerPoweredProvider = catalog.some(
+    (entry) => entry.configured && entry.credentialSource === "server",
+  );
 
   return (
     <section className="panel rise" style={{ "--delay": "80ms" } as React.CSSProperties}>
@@ -216,10 +249,22 @@ export function ProvidersScreen() {
                 credentialSummary={credentials.find((entry) => entry.provider === descriptor.id)}
                 disconnecting={disconnecting === descriptor.id}
                 onDisconnect={handleDisconnect}
+                revealCredentials={advanced}
                 onCredentialsChanged={reload}
               />
             ))}
           </ul>
+        )}
+
+        {state.status === "loaded" && hasServerPoweredProvider && (
+          <button
+            type="button"
+            className="btn btn--link btn--small"
+            aria-pressed={advanced}
+            onClick={() => setAdvanced((value) => !value)}
+          >
+            {advanced ? "Hide advanced options" : "Advanced · bring your own developer app"}
+          </button>
         )}
       </div>
     </section>

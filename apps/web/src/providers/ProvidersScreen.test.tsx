@@ -23,6 +23,7 @@ const CATALOG = {
       displayName: "Spotify",
       authKind: "oauth2",
       configured: true,
+      credentialSource: "server",
       requiredEnv: ["SPOTIFY_CLIENT_ID"],
     },
     {
@@ -30,6 +31,7 @@ const CATALOG = {
       displayName: "YouTube Music",
       authKind: "oauth2",
       configured: false,
+      credentialSource: "none",
       requiredEnv: ["YOUTUBE_CLIENT_ID"],
     },
   ],
@@ -97,14 +99,24 @@ describe("ProvidersScreen", () => {
     expect(await screen.findByText("Set up YouTube Music with your own app")).toBeDefined();
   });
 
-  it("keeps it as a quiet advanced option where the server can already connect", async () => {
-    // Spotify is configured here, so the ordinary path — Connect, and
-    // sign in on Spotify's own page — must not have to compete with it.
+  it("hides bring-your-own-app entirely while the deployment's keys connect the provider", async () => {
+    // End users connect with a click and sign in on Spotify's own page;
+    // developer-app forms are not part of their flow at all.
     vi.stubGlobal("fetch", stubApi([]));
     render(<ProvidersScreen />);
 
     await screen.findByRole("link", { name: "Connect Spotify" });
-    expect(screen.getAllByText("Advanced: use your own developer app")).toHaveLength(1);
+    expect(screen.queryByText("Advanced: use your own developer app")).toBeNull();
+  });
+
+  it("reveals bring-your-own-app only behind the explicit advanced toggle", async () => {
+    vi.stubGlobal("fetch", stubApi([]));
+    render(<ProvidersScreen />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Advanced · bring your own developer app/ }),
+    );
+    expect(await screen.findByText("Advanced: use your own developer app")).toBeDefined();
   });
 
   it("shows which of your own apps is in use, without ever showing the secret", async () => {

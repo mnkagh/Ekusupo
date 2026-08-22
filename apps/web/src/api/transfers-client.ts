@@ -116,8 +116,8 @@ interface ErrorBody {
 }
 
 /**
- * Spotify playlist links come in several shapes, and users paste
- * whichever one their client copied:
+ * Playlist links come in several shapes, and users paste whichever one
+ * their client copied. For Spotify:
  *
  *   https://open.spotify.com/playlist/<id>?si=...
  *   spotify:playlist:<id>
@@ -127,10 +127,24 @@ interface ErrorBody {
  * "paste the link" is the only instruction anyone should need. The
  * query string is dropped — Spotify appends a share token that is not
  * part of the id and produces a 404 if sent.
+ *
+ * For YouTube Music the playlist lives in the URL's `list` parameter,
+ * which shows up on several page shapes (`music.youtube.com/...?list=`,
+ * `youtube.com/watch?v=...&list=`); everything else in those URLs names
+ * a *video*, and sending it would read as a playlist id that does not
+ * exist. A bare id is handed through unchanged.
  */
-export function extractPlaylistId(input: string): string {
+export function extractPlaylistId(input: string, provider = "spotify"): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
+
+  if (provider === "youtube-music") {
+    const listMatch = /[?&]list=([A-Za-z0-9_-]+)/.exec(trimmed);
+    if (listMatch?.[1]) return listMatch[1];
+    // Already a bare id, or something we cannot improve on — hand it
+    // through and let the API report what it finds.
+    return trimmed;
+  }
 
   const uriMatch = /^spotify:playlist:([A-Za-z0-9]+)$/.exec(trimmed);
   if (uriMatch?.[1]) return uriMatch[1];
@@ -171,11 +185,15 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
      * Starts a Dry Run. Resolves as soon as the job exists, **not** when
      * the transfer finishes — the work continues on the server
      * (ADR-0033). Poll `getTransfer` for the outcome.
+     *
+     * `sourceProvider` is omitted for Spotify because that is the API's
+     * own default — sending it would change nothing, and omitting it
+     * keeps the request body honest about what was actually chosen.
      */
-    dryRun(sourcePlaylistId: string): Promise<StartedTransfer> {
+    dryRun(sourcePlaylistId: string, sourceProvider?: string): Promise<StartedTransfer> {
       return request("/transfers/dry-run", {
         method: "POST",
-        body: JSON.stringify({ sourcePlaylistId }),
+        body: JSON.stringify({ sourcePlaylistId, ...(sourceProvider ? { sourceProvider } : {}) }),
       });
     },
 
@@ -185,10 +203,19 @@ export function createTransfersClient(config: TransfersClientConfig = {}) {
      * destination and CLAUDE.md §9.3 requires explicit confirmation for
      * exactly that.
      */
-    liveTransfer(sourcePlaylistId: string, destinationProvider: string): Promise<StartedTransfer> {
+    liveTransfer(
+      sourcePlaylistId: string,
+      destinationProvider: string,
+      sourceProvider?: string,
+    ): Promise<StartedTransfer> {
       return request("/transfers/live", {
         method: "POST",
-        body: JSON.stringify({ sourcePlaylistId, destinationProvider, confirm: true }),
+        body: JSON.stringify({
+          sourcePlaylistId,
+          destinationProvider,
+          confirm: true,
+          ...(sourceProvider ? { sourceProvider } : {}),
+        }),
       });
     },
 

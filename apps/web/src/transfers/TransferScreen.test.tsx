@@ -134,6 +134,39 @@ describe("TransferScreen", () => {
     });
   });
 
+  it("reads the playlist from a YouTube link's list parameter and names its source", async () => {
+    stubApi({ finished: { ...STARTED_JOB, status: "partial", report: emptyReport } });
+    render(<TransferScreen />);
+
+    fireEvent.change(await screen.findByLabelText("From"), {
+      target: { value: "youtube-music" },
+    });
+    await typeLink("https://music.youtube.com/playlist?list=PLabc_123&si=whatever");
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    await waitFor(() => {
+      expect(JSON.parse(postCalls()[0]?.[1].body as string)).toEqual({
+        sourcePlaylistId: "PLabc_123",
+        sourceProvider: "youtube-music",
+      });
+    });
+  });
+
+  it("does not send a source for Spotify, which is the server's default", async () => {
+    stubApi();
+    render(<TransferScreen />);
+
+    fireEvent.change(await screen.findByLabelText("From"), { target: { value: "spotify" } });
+    await typeLink("abc123");
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    await waitFor(() => {
+      expect(JSON.parse(postCalls()[0]?.[1].body as string)).toEqual({
+        sourcePlaylistId: "abc123",
+      });
+    });
+  });
+
   it("shows the report when a run finishes", async () => {
     stubApi({
       finished: {

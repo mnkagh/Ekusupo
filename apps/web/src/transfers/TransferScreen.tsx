@@ -15,6 +15,27 @@ type Mode = "preview" | "live";
 /** Always offered, needs nothing connected, and is what "back up" means here. */
 const UPF_DESTINATION = { id: UPF_DESTINATION_ID, displayName: "A UPF file (download)" };
 
+/**
+ * Providers the server can read a playlist from, with the link shape
+ * each expects. Kept in step with the API's registry — a provider that
+ * cannot be constructed server-side is filtered out of the destination
+ * list by `configured`, and would fail the same way as a source.
+ */
+const SOURCES = [
+  {
+    id: "spotify",
+    displayName: "Spotify",
+    placeholder: "https://open.spotify.com/playlist/...",
+    hint: "Paste a Spotify playlist link. Public playlists work without connecting an account.",
+  },
+  {
+    id: "youtube-music",
+    displayName: "YouTube Music",
+    placeholder: "https://music.youtube.com/playlist?list=...",
+    hint: "Paste a YouTube Music playlist link (or any YouTube URL containing list=). Needs a connected account.",
+  },
+] as const;
+
 function formatWhen(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -39,6 +60,7 @@ function formatWhen(iso: string): string {
  */
 export function TransferScreen() {
   const [input, setInput] = useState("");
+  const [source, setSource] = useState<string>("spotify");
   const [destination, setDestination] = useState(UPF_DESTINATION_ID);
   const [destinations, setDestinations] = useState<CatalogProvider[]>([]);
   const [history, setHistory] = useState<TransferJob[]>([]);
@@ -48,8 +70,10 @@ export function TransferScreen() {
   const [deleting, setDeleting] = useState<string | undefined>();
   const [historyError, setHistoryError] = useState<string | undefined>();
   const [mode, setMode] = useState<Mode>("preview");
+  const sourceId = useId();
   const inputId = useId();
   const destinationId = useId();
+  const activeSource = SOURCES.find((entry) => entry.id === source) ?? SOURCES[0];
 
   const loadHistory = useCallback(() => {
     void transfersClient
@@ -76,17 +100,20 @@ export function TransferScreen() {
   }, []);
 
   const start = (next: Mode) => {
-    const playlistId = extractPlaylistId(input);
+    const playlistId = extractPlaylistId(input, source);
     if (!playlistId) return;
 
     setPendingConfirm(false);
     setMode(next);
     run.starting();
 
+    // Spotify is the API's default source, so it is not sent — see the
+    // client. Anything else names itself explicitly.
+    const from = source === "spotify" ? undefined : source;
     const request =
       next === "preview"
-        ? transfersClient.dryRun(playlistId)
-        : transfersClient.liveTransfer(playlistId, destination);
+        ? transfersClient.dryRun(playlistId, from)
+        : transfersClient.liveTransfer(playlistId, destination, from);
 
     // Resolves when the job exists, not when it finishes — the hook
     // watches it from there (ADR-0033).
@@ -147,6 +174,22 @@ export function TransferScreen() {
 
       <div className="panel__body">
         <form className="transfer-form" onSubmit={handleSubmit}>
+          <label className="field__label" htmlFor={sourceId}>
+            From
+          </label>
+          <select
+            id={sourceId}
+            className="field__input"
+            value={source}
+            onChange={(event) => setSource(event.target.value)}
+          >
+            {SOURCES.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.displayName}
+              </option>
+            ))}
+          </select>
+
           <label className="field__label" htmlFor={inputId}>
             Playlist link
           </label>
@@ -157,7 +200,7 @@ export function TransferScreen() {
               type="text"
               inputMode="url"
               autoComplete="off"
-              placeholder="https://open.spotify.com/playlist/..."
+              placeholder={activeSource.placeholder}
               value={input}
               onChange={(event) => setInput(event.target.value)}
             />
@@ -193,9 +236,7 @@ export function TransferScreen() {
             </button>
           </div>
 
-          <p className="transfer-form__hint">
-            Paste a Spotify playlist link. Public playlists work without connecting an account.
-          </p>
+          <p className="transfer-form__hint">{activeSource.hint}</p>
         </form>
 
         {pendingConfirm && (

@@ -81,9 +81,17 @@ export function App() {
   const closeAuth = () => setAuthDrawer((current) => ({ ...current, open: false }));
 
   useEffect(() => {
-    void authClient.getMe().then((user) => {
-      setAuth(user ? { status: "signed-in", user } : { status: "signed-out" });
-    });
+    void authClient
+      .getMe()
+      .then((user) => {
+        setAuth(user ? { status: "signed-in", user } : { status: "signed-out" });
+      })
+      .catch(() => {
+        // The API being unreachable is not "signed in" and not worth a
+        // stuck spinner: land the visitor on the signed-out page, where
+        // signing in again retries. A refresh recovers either way.
+        setAuth({ status: "signed-out" });
+      });
 
     if (readProviderRedirectMessage(window.location.search)) {
       window.history.replaceState(null, "", window.location.pathname);
@@ -91,31 +99,31 @@ export function App() {
   }, []);
 
   const handleSignOut = async () => {
-    await authClient.signOut();
+    try {
+      await authClient.signOut();
+    } catch {
+      // A failed sign-out must not leave the tab pretending otherwise:
+      // drop the local session regardless — the server's cookie, if it
+      // survived, expires on its own.
+    }
     setAuth({ status: "signed-out" });
   };
 
   return (
     <>
       {/* Set back further once signed in, so the workspace panels have
-          the foreground and the landing keeps the mark at full presence.
-          `shift` slides it clear of whichever drawer is open, so the mark
-          stays centred in the space actually left visible rather than
-          sitting half-covered. */}
-      <Backdrop
-        variant={auth.status === "signed-in" ? "dense" : "calm"}
-        shift={authDrawer.open ? "left" : settingsOpen ? "right" : "none"}
-      />
+          the foreground and the landing keeps the mark at full presence. */}
+      <Backdrop variant={auth.status === "signed-in" ? "dense" : "calm"} />
       <IntroScreen key={introRun} />
 
       {/*
-        The page steps aside from whichever drawer is open — left for
-        auth, which arrives from the right; right for settings, which
-        arrives from the left — so the content ends up centred in what
-        is left of the viewport instead of sitting half-covered. The
-        backdrop above is given the matching `shift`, and both travel the
-        same `--drawer-shift` distance so they move as one surface.
-      */}
+       * The page steps aside from whichever drawer is open — left for
+       * auth, which arrives from the right; right for settings, which
+       * arrives from the left — so the content ends up centred in what
+       * is left of the viewport instead of sitting half-covered. The
+       * backdrop mark does not follow: a watermark stays put, and the
+       * drawer's own scrim does the separating.
+       */}
       <div
         className={`shell ${
           authDrawer.open ? "shell--shifted" : settingsOpen ? "shell--shifted-right" : ""
@@ -133,7 +141,7 @@ export function App() {
               <div className="wordmark">
                 {/* Decorative: the heading beside it already says the
                     name, so the mark is not announced a second time. */}
-                <Logo size={26} className="wordmark__logo" />
+                <Logo size={26} className="wordmark__logo" orbitLabel={false} />
                 <h1 className="wordmark__text">Ekusupo</h1>
                 <p className="wordmark__description">
                   Move playlists between music services, and see exactly what carried over.

@@ -12,6 +12,14 @@ import type { TransferJob } from "../api/transfers-client.js";
  */
 const POLL_INTERVAL_MS = 700;
 
+/**
+ * One failed poll is a network blip, not a transfer failure: the job
+ * keeps running server-side whatever this tab sees. Monitoring gives up
+ * only after a sustained failure — and immediately on a 404, which will
+ * never recover because the job is gone.
+ */
+const MAX_CONSECUTIVE_POLL_FAILURES = 8;
+
 export type JobState =
   | { status: "idle" }
   | { status: "starting" }
@@ -56,11 +64,14 @@ export function useTransferJob(onSettled?: () => void): UseTransferJob {
 
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
 
     const tick = async (): Promise<void> => {
       try {
         const { transfer } = await transfersClient.getTransfer(watchedId);
         if (stopped) return;
+
+        failures = 0;
 
         if (isTerminal(transfer.status)) {
           setState({ status: "finished", job: transfer });
@@ -72,10 +83,29 @@ export function useTransferJob(onSettled?: () => void): UseTransferJob {
         timer = setTimeout(() => void tick(), POLL_INTERVAL_MS);
       } catch (error: unknown) {
         if (stopped) return;
-        setState({
-          status: "error",
-          message: error instanceof ApiError ? error.message : "Lost track of the transfer.",
-        });
+
+        // Gone for good — this user has no such transfer, and no number
+        // of retries changes that.
+        if (error instanceof ApiError && error.status === 404) {
+          setState({ status: "error", message: error.message });
+          return;
+        }
+
+        failures += 1;
+        if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          setState({
+            status: "error",
+            message:
+              error instanceof ApiError
+                ? error.message
+                : "Lost contact with the transfer. Check the history list in a moment.",
+          });
+          return;
+        }
+
+        // Back off a little more each miss, then keep watching — the
+        // transfer is almost certainly still fine.
+        timer = setTimeout(() => void tick(), POLL_INTERVAL_MS * failures);
       }
     };
 

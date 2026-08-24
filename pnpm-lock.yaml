@@ -139,6 +139,15 @@ importers:
         specifier: workspace:*
         version: link:../upf
 
+  packages/providers/deezer:
+    dependencies:
+      '@ekusupo/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@ekusupo/upf':
+        specifier: workspace:*
+        version: link:../../upf
+
   packages/providers/spotify:
     dependencies:
       '@ekusupo/connector-sdk':
@@ -180,6 +189,9 @@ importers:
       '@ekusupo/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ekusupo/provider-deezer':
+        specifier: workspace:*
+        version: link:../../packages/providers/deezer
       '@ekusupo/provider-spotify':
         specifier: workspace:*
         version: link:../../packages/providers/spotify

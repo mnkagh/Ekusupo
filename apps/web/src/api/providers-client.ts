@@ -10,8 +10,8 @@ export interface ConnectedProvider {
 export interface CatalogProvider {
   id: string;
   displayName: string;
-  /** One shape today; see the API's provider registry. */
-  authKind: "oauth2";
+  /** One shape today plus anonymous connectors; see the API's provider registry. */
+  authKind: "oauth2" | "none";
   configured: boolean;
   /** Whose app makes it usable: the caller's own, the deployment's, or nobody's. */
   credentialSource?: "user" | "server" | "none";

@@ -14,6 +14,7 @@
     "@ekusupo/connector-sdk": "workspace:*",
     "@ekusupo/core": "workspace:*",
     "@ekusupo/provider-spotify": "workspace:*",
+    "@ekusupo/provider-deezer": "workspace:*",
     "@ekusupo/provider-upf-file": "workspace:*",
     "@ekusupo/upf": "workspace:*",
     "@electric-sql/pglite": "^0.3.0",

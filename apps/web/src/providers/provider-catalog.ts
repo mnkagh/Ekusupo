@@ -29,6 +29,14 @@ export interface ProviderDescriptor {
  */
 export const PROVIDER_CATALOG: ProviderDescriptor[] = [
   {
+    id: "deezer",
+    name: "Deezer",
+    capability: "Public playlists and catalogue search — no account needed",
+    availability: "available",
+    accent: ["#f472b6", "#facc15"],
+    glyph: "play",
+  },
+  {
     id: "spotify",
     name: "Spotify",
     capability: "Public playlists work without an account",

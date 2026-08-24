@@ -1,5 +1,6 @@
 import type { AuthSession, MusicProvider } from "@ekusupo/connector-sdk";
 import { createSpotifyProvider } from "@ekusupo/provider-spotify";
+import { createDeezerProvider } from "@ekusupo/provider-deezer";
 import { createYouTubeMusicProvider } from "@ekusupo/provider-youtube-music";
 
 /**
@@ -14,7 +15,7 @@ import { createYouTubeMusicProvider } from "@ekusupo/provider-youtube-music";
  * provider gone, nothing implemented it, and an unimplemented branch is
  * worse than an absent one.
  */
-export type ProviderAuthKind = "oauth2";
+export type ProviderAuthKind = "oauth2" | "none";
 
 export interface ProviderCredentials {
   clientId?: string;
@@ -60,6 +61,14 @@ const SPOTIFY_SCOPES = [
 const YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube"].join(" ");
 
 export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
+  {
+    id: "deezer",
+    displayName: "Deezer",
+    authKind: "none",
+    requiredEnv: [],
+    isConfigured: () => true,
+    createProvider: () => createDeezerProvider(),
+  },
   {
     id: "spotify",
     displayName: "Spotify",

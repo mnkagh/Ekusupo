@@ -229,6 +229,12 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
     // fails today with an authentication error the user cannot act on.
     const connected = await sessionWithRefresh(userId, providerId, provider, { connectionService });
     if (connected) return { session: connected, appOnly: false };
+    // Connectors whose manifest declares "none" authenticate trivially:
+    // public-catalog readers like Deezer need nobody's account, so the
+    // empty session is genuine rather than a placeholder.
+    if (provider.manifest.authenticationMethods.includes("none")) {
+      return { session: await provider.authenticate({ method: "none", raw: {} }), appOnly: false };
+    }
     if (providerId !== "spotify" || !canReadPublicAnonymously) return undefined;
     return { session: await appSessions.get(), appOnly: true };
   }

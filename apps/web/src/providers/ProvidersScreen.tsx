@@ -129,10 +129,15 @@ function ProviderTile({
           >
             {disconnecting ? "Disconnecting…" : "Disconnect"}
           </button>
-        ) : connectable ? (
+        ) : connectable && catalogEntry?.authKind === "oauth2" ? (
           <a className="btn btn--connect" href={providersClient.getConnectUrl(descriptor.id)}>
             Connect {descriptor.name}
           </a>
+        ) : connectable ? (
+          // Anonymous connectors (public-catalog readers like Deezer)
+          // need nobody's account — there is nothing to connect, so the
+          // tile says so instead of offering a button that goes nowhere.
+          <span className="tile__pending">No account needed</span>
         ) : (
           <span className="tile__pending">Needs an app</span>
         )}

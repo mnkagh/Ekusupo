@@ -1,0 +1,12 @@
+{
+  "name": "@ekusupo/provider-deezer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@ekusupo/connector-sdk": "workspace:*",
+    "@ekusupo/upf": "workspace:*"
+  }
+}

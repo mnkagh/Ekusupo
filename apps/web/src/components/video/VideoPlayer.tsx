@@ -45,10 +45,16 @@ export function VideoPlayer({ track }: { track: Track | null }) {
           },
           getCurrentTime: () => video.currentTime || 0,
           getDuration: () => video.duration || 0,
+          setVolume: (value: number) => {
+            video.volume = value;
+          },
         };
         player.registerVideoController(controller);
       }
-      return () => player.registerVideoController(null);
+      return () => {
+        videoRef.current?.pause();
+        player.registerVideoController(null);
+      };
     }
 
     const videoId = extractId(track.mediaUrl);
@@ -75,6 +81,7 @@ export function VideoPlayer({ track }: { track: Track | null }) {
               seek: (seconds: number) => ytPlayer.seekTo(seconds, true),
               getCurrentTime: () => ytPlayer.getCurrentTime?.() ?? 0,
               getDuration: () => ytPlayer.getDuration?.() ?? 0,
+              setVolume: (value: number) => ytPlayer.setVolume?.(Math.round(value * 100)),
             };
             player.registerVideoController(controller);
             if (player.isPlaying) ytPlayer.playVideo();
@@ -103,6 +110,7 @@ export function VideoPlayer({ track }: { track: Track | null }) {
 
     return () => {
       destroyed = true;
+      youtubeRef.current?.pauseVideo?.();
       youtubeRef.current?.destroy?.();
       player.registerVideoController(null);
     };

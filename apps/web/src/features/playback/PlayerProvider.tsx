@@ -7,6 +7,7 @@ export interface VideoController {
   seek: (seconds: number) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
+  setVolume: (value: number) => void;
 }
 
 interface PlayerContextValue {
@@ -120,9 +121,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [mediaType, currentTrack, isPlaying]);
 
   useEffect(() => {
-    if (mediaType === 'video' || !audioRef.current) return;
-    audioRef.current.volume = volume;
-  }, [mediaType, volume]);
+    if (mediaType === 'video') {
+      videoController?.setVolume(volume);
+      return;
+    }
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [mediaType, volume, videoController]);
 
   useEffect(() => {
     if (mediaType !== 'video' || !isPlaying || !videoController) return;

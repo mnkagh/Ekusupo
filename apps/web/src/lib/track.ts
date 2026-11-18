@@ -10,6 +10,13 @@ export function toTrack(track: TrackDto): Track {
     durationMs: track.durationMs,
     artworkUrl: track.artworkUrl,
     mediaUrl: track.mediaUrl,
+    mediaType:
+      track.mediaType ??
+      (track.mediaUrl?.includes('youtube.com/embed')
+        ? 'video'
+        : track.mediaUrl?.match(/\.(mp4|webm)(\?|$)/i)
+          ? 'video'
+          : 'audio'),
     provider: track.provider,
     source: track.source,
   };

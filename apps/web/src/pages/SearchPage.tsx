@@ -3,11 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { usePlayer } from '../features/playback/usePlayer';
 import { toTrack } from '../lib/track';
+import type { Track } from '../features/playback/types';
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [provider, setProvider] = useState('all');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const { data, isLoading, error } = useQuery({
     queryKey: ['search', submitted, provider],
     queryFn: () => api.search(submitted, provider),
@@ -59,11 +61,50 @@ export function SearchPage() {
                 {track.artist} · {track.provider} · {track.source}
               </div>
             </div>
-            <button onClick={() => player.playTrack(toTrack(track), data.results.map(toTrack))}>
-              Play
+            <button
+              disabled={!track.mediaUrl}
+              onClick={() => player.playTrack(toTrack(track), data.results.map(toTrack))}
+            >
+              {track.mediaUrl ? 'Play' : 'No media'}
             </button>
           </div>
         ))}
+      </div>
+      <div className="card" style={{ marginTop: 24, maxWidth: 720 }}>
+        <h2>Play a YouTube video</h2>
+        <p style={{ color: 'var(--foreground-secondary)', fontSize: 14 }}>
+          Paste a public YouTube URL or video ID. Playback uses YouTube's embedded player and does
+          not require an Ekusupo account.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const match = youtubeUrl.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
+            const id = match?.[1] ?? (youtubeUrl.trim().length === 11 ? youtubeUrl.trim() : null);
+            if (!id) return;
+            const track: Track = {
+              id: `youtube:${id}`,
+              title: `YouTube video ${id}`,
+              artist: 'YouTube',
+              durationMs: 0,
+              mediaUrl: `https://www.youtube.com/embed/${id}?enablejsapi=1`,
+              mediaType: 'video',
+              provider: 'youtube-music',
+              source: 'live',
+            };
+            player.playTrack(track);
+            setYoutubeUrl('');
+          }}
+          style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}
+        >
+          <input
+            value={youtubeUrl}
+            onChange={(event) => setYoutubeUrl(event.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            style={{ flex: 1, minWidth: 240 }}
+          />
+          <button type="submit">Play video</button>
+        </form>
       </div>
       {submitted && !isLoading && !data?.results.length && <p>No results.</p>}
     </div>

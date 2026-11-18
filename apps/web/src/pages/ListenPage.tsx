@@ -56,7 +56,9 @@ function TrackRow({ track, onPlay }: { track: TrackDto; onPlay: () => void }) {
           {track.artist} · {track.provider} · {track.source}
         </div>
       </div>
-      <button onClick={onPlay}>Play</button>
+      <button disabled={!track.mediaUrl} onClick={onPlay}>
+        {track.mediaUrl ? 'Play' : 'No media'}
+      </button>
     </div>
   );
 }

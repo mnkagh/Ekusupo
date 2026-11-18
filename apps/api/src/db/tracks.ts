@@ -84,6 +84,10 @@ export function toTrackDto(row: TrackRow) {
     durationMs: row.duration_ms,
     artworkUrl: row.artwork_url ?? undefined,
     mediaUrl: row.media_url ?? undefined,
+    mediaType:
+      row.provider === 'youtube-music' || /\.(mp4|webm)(\?|$)/i.test(row.media_url ?? '')
+        ? 'video'
+        : 'audio',
     provider: row.provider,
     source: row.source as 'demo' | 'live' | 'imported',
   };

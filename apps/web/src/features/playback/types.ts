@@ -8,6 +8,7 @@ export interface Track {
   durationMs: number;
   artworkUrl?: string;
   mediaUrl?: string;
+  mediaType?: 'audio' | 'video';
   provider: string;
   source: TrackSource;
   metadata?: Record<string, unknown>;

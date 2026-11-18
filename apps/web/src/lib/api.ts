@@ -62,6 +62,7 @@ export interface TrackDto {
   durationMs: number;
   artworkUrl?: string;
   mediaUrl?: string;
+  mediaType?: 'audio' | 'video';
   provider: string;
   source: 'demo' | 'live' | 'imported';
 }

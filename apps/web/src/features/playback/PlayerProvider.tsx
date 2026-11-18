@@ -1,6 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from './types';
 
+export interface VideoController {
+  play: () => Promise<void> | void;
+  pause: () => void;
+  seek: (seconds: number) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+}
+
 interface PlayerContextValue {
   queue: Track[];
   currentTrack: Track | null;
@@ -9,6 +17,7 @@ interface PlayerContextValue {
   progress: number;
   duration: number;
   volume: number;
+  mediaType: 'audio' | 'video';
   setQueue: (tracks: Track[], startIndex?: number) => void;
   playTrack: (track: Track, queue?: Track[]) => void;
   togglePlay: () => void;
@@ -16,12 +25,15 @@ interface PlayerContextValue {
   previous: () => void;
   seek: (seconds: number) => void;
   setVolume: (value: number) => void;
+  setPlaying: (value: boolean) => void;
+  registerVideoController: (controller: VideoController | null) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoControllerRef = useRef<VideoController | null>(null);
   const [queue, setQueueState] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,8 +41,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.75);
   const [hydrated, setHydrated] = useState(false);
+  const [videoController, setVideoController] = useState<VideoController | null>(null);
 
   const currentTrack = currentIndex >= 0 ? (queue[currentIndex] ?? null) : null;
+  const mediaType =
+    currentTrack?.mediaType ??
+    (currentTrack?.mediaUrl?.includes('youtube.com/embed') ? 'video' : 'audio');
 
   useEffect(() => {
     try {
@@ -57,6 +73,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [hydrated, queue, currentIndex, volume]);
 
   useEffect(() => {
+    if (mediaType === 'video') return;
     const audio = new Audio();
     audio.volume = volume;
     audioRef.current = audio;
@@ -85,9 +102,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [queue.length, volume]);
+  }, [mediaType, queue.length, volume]);
 
   useEffect(() => {
+    if (mediaType === 'video') return;
     const audio = audioRef.current;
     if (!audio || !currentTrack?.mediaUrl) return;
 
@@ -99,11 +117,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setIsPlaying(false);
       });
     }
-  }, [currentTrack, isPlaying]);
+  }, [mediaType, currentTrack, isPlaying]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
+    if (mediaType === 'video' || !audioRef.current) return;
+    audioRef.current.volume = volume;
+  }, [mediaType, volume]);
+
+  useEffect(() => {
+    if (mediaType !== 'video' || !isPlaying || !videoController) return;
+    const timer = window.setInterval(() => {
+      setProgress(videoController.getCurrentTime());
+      const nextDuration = videoController.getDuration();
+      if (nextDuration) setDuration(nextDuration);
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [mediaType, isPlaying, videoController]);
+
+  useEffect(() => {
+    if (mediaType !== 'video' || !videoController) return;
+    if (isPlaying) {
+      void videoController.play();
+    } else {
+      videoController.pause();
+    }
+  }, [mediaType, isPlaying, videoController]);
 
   function setQueue(tracks: Track[], startIndex = 0) {
     setQueueState(tracks);
@@ -122,6 +160,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   function togglePlay() {
+    if (mediaType === 'video') {
+      if (!videoController) return;
+      if (isPlaying) {
+        videoController.pause();
+        setIsPlaying(false);
+      } else {
+        void videoController.play();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
     const audio = audioRef.current;
     if (!audio || !currentTrack?.mediaUrl) return;
     if (isPlaying) {
@@ -148,6 +198,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setProgress(0);
   }
 
+  function seek(seconds: number) {
+    if (mediaType === 'video' && videoController) {
+      videoController.seek(seconds);
+      setProgress(seconds);
+      return;
+    }
+    if (audioRef.current) {
+      audioRef.current.currentTime = seconds;
+      setProgress(seconds);
+    }
+  }
+
   const value = useMemo<PlayerContextValue>(
     () => ({
       queue,
@@ -157,20 +219,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       progress,
       duration,
       volume,
+      mediaType,
       setQueue,
       playTrack,
       togglePlay,
       next: () => move(1),
       previous: () => move(-1),
-      seek: (seconds) => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = seconds;
-          setProgress(seconds);
-        }
-      },
+      seek,
       setVolume: setVolumeState,
+      setPlaying: setIsPlaying,
+      registerVideoController: (controller) => {
+        videoControllerRef.current = controller;
+        setVideoController(controller);
+      },
     }),
-    [queue, currentTrack, currentIndex, isPlaying, progress, duration, volume],
+    [
+      queue,
+      currentTrack,
+      currentIndex,
+      isPlaying,
+      progress,
+      duration,
+      volume,
+      mediaType,
+      videoController,
+    ],
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

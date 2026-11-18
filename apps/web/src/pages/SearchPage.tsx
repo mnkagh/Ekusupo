@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { usePlayer } from '../features/playback/usePlayer';
 import { toTrack } from '../lib/track';
@@ -9,11 +9,15 @@ export function SearchPage() {
   const [submitted, setSubmitted] = useState('');
   const [provider, setProvider] = useState('all');
   const { data: providers } = useQuery({ queryKey: ['providers'], queryFn: api.providers });
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['search', submitted, provider],
-    queryFn: () => api.search(submitted, provider),
-    enabled: submitted.length > 0,
-  });
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ['search', submitted, provider],
+      queryFn: ({ pageParam }) => api.search(submitted, provider, pageParam as number),
+      enabled: submitted.length > 0,
+      initialPageParam: 0,
+      getNextPageParam: (lastPage) => lastPage.nextOffset,
+    });
+  const results = data?.pages.flatMap((page) => page.results) ?? [];
   const player = usePlayer();
 
   return (
@@ -52,7 +56,7 @@ export function SearchPage() {
       {isLoading && <p>Searching…</p>}
       {error && <p style={{ color: 'var(--danger)' }}>{String(error)}</p>}
       <div style={{ display: 'grid', gap: 12, marginTop: 24 }}>
-        {data?.results.map((track) => (
+        {results.map((track) => (
           <div
             key={track.id}
             className="card"
@@ -71,14 +75,23 @@ export function SearchPage() {
             </div>
             <button
               disabled={!track.mediaUrl}
-              onClick={() => player.playTrack(toTrack(track), data.results.map(toTrack))}
+              onClick={() => player.playTrack(toTrack(track), results.map(toTrack))}
             >
               {track.mediaUrl ? 'Play' : 'No media'}
             </button>
           </div>
         ))}
       </div>
-      {submitted && !isLoading && !data?.results.length && <p>No results.</p>}
+      {hasNextPage && (
+        <button
+          onClick={() => fetchNextPage()}
+          disabled={isFetchingNextPage}
+          style={{ marginTop: 16 }}
+        >
+          {isFetchingNextPage ? 'Loading…' : 'See more'}
+        </button>
+      )}
+      {submitted && !isLoading && !results.length && <p>No results.</p>}
     </div>
   );
 }

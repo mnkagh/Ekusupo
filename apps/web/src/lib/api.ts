@@ -22,9 +22,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string }>('/health'),
   providers: () => request<Provider[]>('/providers'),
-  search: (query: string, provider?: string) =>
+  search: (query: string, provider?: string, offset = 0) =>
     request<SearchResponse>(
-      `/search?q=${encodeURIComponent(query)}&provider=${encodeURIComponent(provider ?? 'all')}`,
+      `/search?q=${encodeURIComponent(query)}&provider=${encodeURIComponent(provider ?? 'all')}&limit=5&offset=${offset}`,
     ),
   library: () => request<LibraryResponse>('/library'),
   addLibrary: (trackId: string) =>
@@ -72,6 +72,7 @@ export interface SearchResponse {
   provider: string;
   results: TrackDto[];
   demo: boolean;
+  nextOffset: number | null;
 }
 
 export interface LibraryResponse {

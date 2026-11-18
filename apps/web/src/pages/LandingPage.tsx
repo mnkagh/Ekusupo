@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Vinyl3D } from '../components/vinyl/Vinyl3D';
 
 export function LandingPage() {
   return (
@@ -50,10 +51,7 @@ export function LandingPage() {
         </div>
       </div>
       <div style={{ display: 'grid', placeItems: 'center' }}>
-        <div
-          className="vinyl"
-          style={{ width: 360, height: 360, animation: 'spin 8s linear infinite' }}
-        />
+        <Vinyl3D spinning size={360} />
       </div>
     </section>
   );

@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { LyricsPanel } from '../lyrics/LyricsPanel';
+import { VideoPlayer } from '../video/VideoPlayer';
 import { usePlayer } from '../../features/playback/usePlayer';
 
 const navigation = [
@@ -15,6 +18,8 @@ const navigation = [
 
 export function AppShell() {
   const player = usePlayer();
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   return (
     <div className="app-grid">
@@ -110,8 +115,52 @@ export function AppShell() {
           <span style={{ fontSize: 12, color: 'var(--foreground-secondary)' }}>
             Queue: {player.queue.length}
           </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowLyrics(true)}>Lyrics</button>
+            <button onClick={() => setShowVideo(true)}>Video</button>
+          </div>
         </div>
       </footer>
+      {(showLyrics || showVideo) && (
+        <div
+          onClick={() => {
+            setShowLyrics(false);
+            setShowVideo(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.72)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 50,
+            padding: 24,
+          }}
+        >
+          <div
+            className="card"
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(720px, 100%)', maxHeight: '80vh', overflow: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h2>{showVideo ? 'Video' : 'Lyrics'}</h2>
+              <button
+                onClick={() => {
+                  setShowLyrics(false);
+                  setShowVideo(false);
+                }}
+              >
+                Close
+              </button>
+            </div>
+            {showVideo ? (
+              <VideoPlayer track={player.currentTrack} />
+            ) : (
+              <LyricsPanel track={player.currentTrack} progress={player.progress} />
+            )}
+          </div>
+        </div>
+      )}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

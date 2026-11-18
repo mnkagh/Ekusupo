@@ -1,12 +1,16 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api, TrackDto } from '../lib/api';
+import { useAuth } from '../features/auth/useAuth';
+import { useGuestStore } from '../features/guest/guestStore';
 import { usePlayer } from '../features/playback/usePlayer';
 import { toTrack } from '../lib/track';
 
 export function ListenPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['library'], queryFn: api.library });
+  const { isGuest } = useAuth();
   const player = usePlayer();
   const recordHistory = useMutation({ mutationFn: api.recordHistory });
+  const recordGuestHistory = useGuestStore((state) => state.recordHistory);
 
   return (
     <div>
@@ -23,7 +27,8 @@ export function ListenPage() {
             track={track}
             onPlay={() => {
               player.playTrack(toTrack(track), data.tracks.map(toTrack));
-              recordHistory.mutate(track.id);
+              if (isGuest) recordGuestHistory(track);
+              else recordHistory.mutate(track.id);
             }}
           />
         ))}

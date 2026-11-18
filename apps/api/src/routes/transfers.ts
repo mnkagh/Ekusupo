@@ -2,7 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database';
-import { listPlaylistTracks, listDemoTracks, listTracksByProvider } from '../db/tracks';
+import { getSessionFromRequest } from '../auth/routes';
+import {
+  listPlaylistTracks,
+  listDemoTracks,
+  listTracksByProvider,
+  upsertTrack,
+  createPlaylist,
+  addPlaylistTrack,
+} from '../db/tracks';
 
 const transferSchema = z.object({
   sourceProvider: z.string(),
@@ -78,5 +86,105 @@ export function registerTransferRoutes(app: FastifyInstance) {
     );
 
     return report;
+  });
+
+  app.post('/transfers/import', async (request, reply) => {
+    const user = getSessionFromRequest(request);
+    if (!user) return reply.code(401).send({ error: 'Authentication required' });
+
+    const parsed = z
+      .object({
+        document: z.object({
+          format: z.literal('UPF'),
+          version: z.string(),
+          playlist: z.object({ name: z.string(), trackIds: z.array(z.string()) }),
+          tracks: z.array(
+            z.object({
+              id: z.string(),
+              title: z.string(),
+              artist: z.string(),
+              album: z.string().optional(),
+              durationMs: z.number(),
+              artworkUrl: z.string().optional(),
+              mediaUrl: z.string().optional(),
+              provider: z.string(),
+              source: z.enum(['demo', 'live', 'imported']),
+            }),
+          ),
+        }),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const { document } = parsed.data;
+    const trackIds = [];
+    for (const track of document.tracks) {
+      const id = upsertTrack({
+        id: track.id,
+        provider: track.provider,
+        providerTrackId: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        durationMs: track.durationMs,
+        artworkUrl: track.artworkUrl,
+        mediaUrl: track.mediaUrl,
+        source: 'imported',
+      });
+      trackIds.push(id);
+    }
+
+    const playlistId = createPlaylist(user.id, document.playlist.name);
+    for (const trackId of document.playlist.trackIds) {
+      addPlaylistTrack(playlistId, trackId);
+    }
+
+    return { playlistId, name: document.playlist.name, trackIds };
+  });
+
+  app.post('/transfers/execute', async (request, reply) => {
+    const user = getSessionFromRequest(request);
+    if (!user) return reply.code(401).send({ error: 'Authentication required' });
+
+    const parsed = z
+      .object({
+        sourceProvider: z.string(),
+        destinationProvider: z.string(),
+        playlistId: z.string().optional(),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const { sourceProvider, destinationProvider, playlistId } = parsed.data;
+    if (destinationProvider !== 'demo') {
+      return reply.code(501).send({
+        error:
+          'Live transfer is only implemented for the demo provider. Other providers require provider write APIs and credentials.',
+      });
+    }
+
+    const sourceTracks = playlistId
+      ? listPlaylistTracks(playlistId)
+      : sourceProvider === 'demo'
+        ? listDemoTracks()
+        : listTracksByProvider(sourceProvider);
+
+    const destinationPlaylistId = createPlaylist(
+      user.id,
+      `Transferred: ${sourceProvider} to ${destinationProvider}`,
+    );
+    for (const track of sourceTracks) {
+      addPlaylistTrack(destinationPlaylistId, track.id);
+    }
+
+    return {
+      id: randomUUID(),
+      sourceProvider,
+      destinationProvider,
+      destinationPlaylistId,
+      matched: sourceTracks.length,
+      unmatched: 0,
+      live: true,
+    };
   });
 }

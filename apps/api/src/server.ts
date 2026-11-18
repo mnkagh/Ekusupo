@@ -11,6 +11,7 @@ import { registerPlaylistRoutes } from './routes/playlists';
 import { registerHistoryRoutes } from './routes/history';
 import { registerExportRoutes } from './routes/export';
 import { registerTransferRoutes } from './routes/transfers';
+import { registerLyricsRoutes } from './routes/lyrics';
 
 migrate();
 seedDatabase();
@@ -34,6 +35,7 @@ export async function createServer() {
       registerHistoryRoutes(api);
       registerExportRoutes(api);
       registerTransferRoutes(api);
+      registerLyricsRoutes(api);
     },
     { prefix: '/api' },
   );

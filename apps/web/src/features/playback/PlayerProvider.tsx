@@ -28,8 +28,33 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.75);
+  const [hydrated, setHydrated] = useState(false);
 
   const currentTrack = currentIndex >= 0 ? (queue[currentIndex] ?? null) : null;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ekusupo-player');
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          queue?: Track[];
+          currentIndex?: number;
+          volume?: number;
+        };
+        if (Array.isArray(saved.queue)) setQueueState(saved.queue);
+        if (typeof saved.currentIndex === 'number') setCurrentIndex(saved.currentIndex);
+        if (typeof saved.volume === 'number') setVolumeState(saved.volume);
+      }
+    } catch {
+      // Ignore malformed guest player state.
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem('ekusupo-player', JSON.stringify({ queue, currentIndex, volume }));
+  }, [hydrated, queue, currentIndex, volume]);
 
   useEffect(() => {
     const audio = new Audio();

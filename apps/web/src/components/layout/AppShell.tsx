@@ -81,14 +81,7 @@ export function AppShell() {
 
         <footer className="player-bar">
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div
-              className="vinyl"
-              style={{
-                width: 56,
-                height: 56,
-                animation: player.isPlaying ? 'spin 4s linear infinite' : 'none',
-              }}
-            />
+            <Vinyl3D spinning={player.isPlaying} size={72} />
             <div>
               <div style={{ fontWeight: 600 }}>
                 {player.currentTrack?.title ?? 'No track selected'}
@@ -161,7 +154,9 @@ export function AppShell() {
               style={{ width: 'min(720px, 100%)', maxHeight: '80vh', overflow: 'auto' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 id="media-dialog-title">{showVideo ? 'Video' : 'Lyrics'}</h2>
+                <h2 id="media-dialog-title">
+                  {showVideo ? 'Video' : showVinyl ? 'Vinyl' : 'Lyrics'}
+                </h2>
                 <button
                   onClick={() => {
                     setShowLyrics(false);

@@ -8,6 +8,7 @@ export function SearchPage() {
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [provider, setProvider] = useState('all');
+  const { data: providers } = useQuery({ queryKey: ['providers'], queryFn: api.providers });
   const { data, isLoading, error } = useQuery({
     queryKey: ['search', submitted, provider],
     queryFn: () => api.search(submitted, provider),
@@ -42,6 +43,12 @@ export function SearchPage() {
         </select>
         <button type="submit">Search</button>
       </form>
+      {providers?.find((item) => item.id === provider)?.status === 'requires_configuration' && (
+        <p style={{ color: 'var(--warning)' }}>
+          {providers.find((item) => item.id === provider)?.name} search requires server
+          configuration. Configure it in apps/api/.env and restart the API.
+        </p>
+      )}
       {isLoading && <p>Searching…</p>}
       {error && <p style={{ color: 'var(--danger)' }}>{String(error)}</p>}
       <div style={{ display: 'grid', gap: 12, marginTop: 24 }}>

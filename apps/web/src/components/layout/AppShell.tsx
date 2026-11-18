@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LyricsPanel } from '../lyrics/LyricsPanel';
 import { VideoPlayer } from '../video/VideoPlayer';
@@ -22,6 +22,22 @@ export function AppShell() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showVinyl, setShowVinyl] = useState(false);
+  const lastAutoTrackId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!player.currentTrack) return;
+    if (player.currentTrack.id === lastAutoTrackId.current) return;
+    lastAutoTrackId.current = player.currentTrack.id;
+    if (player.currentTrack.mediaType === 'video') {
+      setShowVideo(true);
+      setShowVinyl(false);
+      setShowLyrics(false);
+    } else {
+      setShowVinyl(true);
+      setShowVideo(false);
+      setShowLyrics(false);
+    }
+  }, [player.currentTrack]);
 
   return (
     <>

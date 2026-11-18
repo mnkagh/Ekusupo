@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LyricsPanel } from '../lyrics/LyricsPanel';
 import { VideoPlayer } from '../video/VideoPlayer';
+import { Vinyl3D } from '../vinyl/Vinyl3D';
 import { usePlayer } from '../../features/playback/usePlayer';
 
 const navigation = [
@@ -20,6 +21,7 @@ export function AppShell() {
   const player = usePlayer();
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [showVinyl, setShowVinyl] = useState(false);
 
   return (
     <>
@@ -129,14 +131,16 @@ export function AppShell() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowLyrics(true)}>Lyrics</button>
               <button onClick={() => setShowVideo(true)}>Video</button>
+              <button onClick={() => setShowVinyl(true)}>Vinyl</button>
             </div>
           </div>
         </footer>
-        {(showLyrics || showVideo) && (
+        {(showLyrics || showVideo || showVinyl) && (
           <div
             onClick={() => {
               setShowLyrics(false);
               setShowVideo(false);
+              setShowVinyl(false);
             }}
             style={{
               position: 'fixed',
@@ -162,6 +166,7 @@ export function AppShell() {
                   onClick={() => {
                     setShowLyrics(false);
                     setShowVideo(false);
+                    setShowVinyl(false);
                   }}
                 >
                   Close
@@ -169,6 +174,16 @@ export function AppShell() {
               </div>
               {showVideo ? (
                 <VideoPlayer track={player.currentTrack} />
+              ) : showVinyl ? (
+                <div style={{ display: 'grid', placeItems: 'center', gap: 16 }}>
+                  <Vinyl3D spinning={player.isPlaying} size={320} />
+                  <div style={{ textAlign: 'center' }}>
+                    <strong>{player.currentTrack?.title ?? 'No track selected'}</strong>
+                    <div style={{ color: 'var(--foreground-secondary)', fontSize: 14 }}>
+                      {player.currentTrack?.artist ?? 'Choose a track to begin'}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <LyricsPanel track={player.currentTrack} progress={player.progress} />
               )}
